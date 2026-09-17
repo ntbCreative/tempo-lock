@@ -136,3 +136,40 @@ describe('tempoEstimator: candidate diagnostics', () => {
     expect(bpms).toContain(120);
   });
 });
+
+describe('tempoEstimator: confidence grows with sustained consistent evidence', () => {
+  // Regression coverage for a real bug: confidence used to be the winning
+  // candidate's *share* of total vote weight across all harmonic
+  // candidates. For a very clean, consistent source (like a metronome-
+  // steady stick tap), the half/double/third-time siblings accumulate
+  // votes just as cleanly, so that share didn't reliably rise -- and could
+  // even fall -- as more consistent taps came in, causing the detector to
+  // sit at "Finding tempo" indefinitely despite obviously steady input.
+  // Confidence must now grow (or at least not shrink) as more consistent
+  // onsets arrive, and a bare-minimum onset count shouldn't already read
+  // as maximally confident.
+
+  it('increases confidence as more consistent taps accumulate', () => {
+    const confidences = [4, 8, 16, 24].map((count) => estimateTempo(clickTrain(100, count)).confidence);
+    for (let i = 1; i < confidences.length; i++) {
+      expect(confidences[i]).toBeGreaterThanOrEqual(confidences[i - 1]);
+    }
+    // And it should have visibly grown from the sparse end to the dense end.
+    expect(confidences[confidences.length - 1]).toBeGreaterThan(confidences[0]);
+  });
+
+  it('does not report near-maximum confidence from the bare minimum onset count', () => {
+    const result = estimateTempo(clickTrain(100, 4)); // exactly minOnsetsToAccept
+    expect(result.confidence).toBeLessThan(0.8);
+  });
+
+  it('reaches high confidence after a couple of bars of clean, steady taps', () => {
+    const result = estimateTempo(clickTrain(100, 16)); // 4 bars at 4/4
+    expect(result.confidence).toBeGreaterThan(0.8);
+  });
+
+  it('never exceeds 1', () => {
+    const result = estimateTempo(clickTrain(100, 64));
+    expect(result.confidence).toBeLessThanOrEqual(1);
+  });
+});

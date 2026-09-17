@@ -117,7 +117,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (130 tests as of this build).
+Run `npm run test` for the full suite (134 tests as of this build).
 
 ## Known real-world limitations
 
@@ -163,6 +163,24 @@ real kit has not been measured. In particular:
   Clave) are synthesized from oscillators and filtered noise, not sampled
   recordings, so they're a reasonable approximation of the real instrument
   rather than a recording of one.
+- **Confidence calibration fix (this build)**: the tempo estimator's
+  confidence used to be the winning candidate's *share* of vote weight
+  across all harmonic candidates (fundamental, half-time, double-time,
+  etc). That's miscalibrated for a very clean, consistent source — a
+  steady stick tap populates its harmonic siblings just as cleanly as the
+  real tempo, so the winner's share didn't reliably rise with more
+  consistent evidence, and could sit below the acceptance threshold
+  indefinitely even with obviously steady input (reported as "keeps
+  looking for a tempo" despite consistent tapping). Confidence is now
+  based on the winner's *absolute* vote count instead, which grows
+  monotonically with real evidence regardless of how well-supported the
+  octave siblings also are. Covered by new tests in
+  `tempoEstimator.test.ts` asserting confidence rises with more onsets and
+  doesn't spike from a bare-minimum onset count. This has only been
+  verified against synthetic click trains, not a real kit — if it's still
+  unreliable, the onset-count readout shown under the BPM display while
+  status is "Finding tempo…" is there to help pin down whether onsets are
+  even being detected at all versus a confidence/tuning issue.
 - **Count-in**: covers exactly the auto-start countdown's bars and stops
   itself right as the full-volume click track begins — both are computed
   from the same numbers, so they should hand off cleanly, but this hasn't

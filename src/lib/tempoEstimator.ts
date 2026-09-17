@@ -19,6 +19,17 @@ import type { TempoCandidate, TempoEstimate } from './types';
  * fundamental over its octaves without hard-coding a "prefer slower"
  * (or "prefer faster") rule, because the fundamental accumulates votes from
  * every span while an octave only accumulates from a subset.
+ *
+ * Confidence is deliberately based on the winning candidate's *absolute*
+ * vote count (support), not its *share* of the total vote weight across
+ * all harmonic candidates. A share-based confidence is miscalibrated: a
+ * very clean, consistent source (e.g. a metronome-steady stick tap) also
+ * populates its half/double/third-time siblings cleanly, so the winner's
+ * share doesn't reliably rise with more consistent evidence -- it can
+ * even fall as those siblings accumulate their own votes in parallel. An
+ * absolute, saturating measure of the winner's own support grows
+ * monotonically with real evidence instead, whether or not competing
+ * harmonics also happen to be well-supported.
  */
 
 export interface TempoEstimatorConfig {
@@ -31,6 +42,8 @@ export interface TempoEstimatorConfig {
   maxSpan: number;
   /** Relative score gap below which two top candidates are considered "similar" for tie-breaking. */
   tieBreakEpsilon: number;
+  /** Winning candidate's raw vote count at/above which confidence reaches 1.0. */
+  supportSaturation: number;
 }
 
 export const DEFAULT_ESTIMATOR_CONFIG: TempoEstimatorConfig = {
@@ -40,6 +53,7 @@ export const DEFAULT_ESTIMATOR_CONFIG: TempoEstimatorConfig = {
   minOnsetsToAccept: 4,
   maxSpan: 3,
   tieBreakEpsilon: 0.08,
+  supportSaturation: 12,
 };
 
 function bpmToIntervalMs(bpm: number): number {
@@ -165,8 +179,11 @@ export function estimateTempo(
     }
   }
 
-  const confidence = Math.max(0, Math.min(1, chosen.score));
-  const coherent = chosen.score > 0.2;
+  const confidence = Math.max(0, Math.min(1, chosen.supportCount / cfg.supportSaturation));
+  // A basic sanity floor, not the real gate: real acceptance is the (now
+  // support-based) confidence threshold applied upstream in continuity.ts.
+  // This just rules out a degenerate zero/near-zero-support "winner".
+  const coherent = chosen.supportCount >= 2;
 
   return {
     bpm: chosen.bpm,

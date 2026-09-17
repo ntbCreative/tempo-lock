@@ -134,6 +134,10 @@ function App() {
           </div>
         </div>
 
+        {isListening && continuity.status === 'finding' && (
+          <p className="notice notice--diagnostic">{engineState.onsetCount} onsets detected</p>
+        )}
+
         {isListening && settings.metronomeBars > 0 && !metronomeActive && (
           <p className="notice notice--metronome">
             {continuity.status === 'locked' || continuity.status === 'low-confidence'

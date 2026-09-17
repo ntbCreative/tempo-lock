@@ -209,6 +209,11 @@ body {
   color: var(--secondary);
 }
 
+.notice--diagnostic {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
 .big-button--stop-metronome {
   background: var(--bg-raised);
   color: var(--secondary);
