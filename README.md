@@ -181,6 +181,18 @@ real kit has not been measured. In particular:
   unreliable, the onset-count readout shown under the BPM display while
   status is "Finding tempo…" is there to help pin down whether onsets are
   even being detected at all versus a confidence/tuning issue.
+- **Stop Click Track re-arm fix (this build)**: pressing "Stop Click
+  Track" while still listening used to only stop the audio — the
+  auto-start countdown would immediately begin counting again (the tempo
+  was often still being detected), silently restarting the click a few
+  seconds later and making the button look broken. An explicit stop now
+  suppresses auto-start for the rest of that listening session; it
+  re-arms on the next Start Listening or on changing the auto-start bars
+  setting. This is hook-level orchestration (React state/refs across two
+  audio engine instances), not pure logic, so it isn't covered by an
+  automated test the way the modules above are — worth specifically
+  re-confirming: stop the click, wait several seconds while still
+  listening, and check it stays stopped.
 - **Count-in**: covers exactly the auto-start countdown's bars and stops
   itself right as the full-volume click track begins — both are computed
   from the same numbers, so they should hand off cleanly, but this hasn't

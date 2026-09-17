@@ -116,6 +116,13 @@ export function useTempoDetector() {
   const barCountdownRef = useRef<BarCountdownState>(createBarCountdownState());
   const settingsRef = useRef(settings);
   const positionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Set when the user explicitly stops the auto-triggered click track while
+  // still listening. Without this, the countdown would immediately re-arm
+  // itself (the tempo is often still being detected) and silently restart
+  // the click a few seconds later, making "Stop Click Track" look broken.
+  // Cleared on a fresh Start Listening or a metronomeBars settings change,
+  // both of which are legitimate re-arm points.
+  const autoStartSuppressedRef = useRef(false);
 
   const clampBpm = useCallback(
     (bpm: number) => Math.min(settingsRef.current.maxBpm, Math.max(settingsRef.current.minBpm, bpm)),
@@ -137,7 +144,8 @@ export function useTempoDetector() {
     }, POSITION_POLL_MS);
   }, [stopPositionPoll]);
 
-  const stopMetronome = useCallback(() => {
+  /** Internal: stops the click track and count-in, without touching auto-start suppression. Used for legitimate resets (settings change, unmount, session end) where re-arming is correct. */
+  const stopMetronomeInternal = useCallback(() => {
     metronomeEngineRef.current?.stop();
     countInEngineRef.current?.stop();
     barCountdownRef.current = createBarCountdownState();
@@ -145,6 +153,12 @@ export function useTempoDetector() {
     setMetronomeBpm(null);
     stopPositionPoll();
   }, [stopPositionPoll]);
+
+  /** User-facing stop (the "Stop Click Track" button): also suppresses the auto-start countdown from re-arming itself for the rest of this listening session. */
+  const stopMetronome = useCallback(() => {
+    autoStartSuppressedRef.current = true;
+    stopMetronomeInternal();
+  }, [stopMetronomeInternal]);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -181,6 +195,13 @@ export function useTempoDetector() {
             stopPositionPoll();
           }
           barCountdownRef.current = createBarCountdownState();
+          autoStartSuppressedRef.current = false; // a fresh session can always auto-start again
+          return;
+        }
+
+        if (autoStartSuppressedRef.current) {
+          // User explicitly stopped the click track this session: don't
+          // silently restart it just because the tempo is still detected.
           return;
         }
 
@@ -248,9 +269,10 @@ export function useTempoDetector() {
   useEffect(() => {
     if (prevMetronomeBarsRef.current !== settings.metronomeBars) {
       prevMetronomeBarsRef.current = settings.metronomeBars;
-      stopMetronome();
+      autoStartSuppressedRef.current = false; // changing the setting is a deliberate re-arm
+      stopMetronomeInternal();
     }
-  }, [settings.metronomeBars, stopMetronome]);
+  }, [settings.metronomeBars, stopMetronomeInternal]);
 
   const start = useCallback(() => {
     engineRef.current?.start();
