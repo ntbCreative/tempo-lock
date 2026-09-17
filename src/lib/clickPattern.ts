@@ -1,0 +1,75 @@
+/**
+ * Which sound a given beat within a bar should play, based on the chosen
+ * accent mode. Pure and independent of both the scheduler and the audio
+ * synthesis, so the pattern logic can be tested on its own.
+ */
+
+export type AccentMode = 'all' | 'first' | 'backbeat' | 'custom';
+
+export type ClickSound = 'accent' | 'normal' | 'clap' | 'mute';
+
+export interface ClickPatternConfig {
+  accentMode: AccentMode;
+  beatsPerBar: number;
+  /** For 'custom' mode only: zero-indexed beat positions within the bar that get an accent click; every other beat plays a normal click. */
+  customAccentBeats: number[];
+}
+
+export const DEFAULT_CLICK_PATTERN_CONFIG: ClickPatternConfig = {
+  accentMode: 'first',
+  beatsPerBar: 4,
+  customAccentBeats: [0],
+};
+
+/**
+ * `beatIndexInBar` is zero-indexed (0 = first beat of the bar). Returns which
+ * sound that beat should play for the given pattern config.
+ */
+export function resolveClickSound(beatIndexInBar: number, config: Partial<ClickPatternConfig> = {}): ClickSound {
+  const cfg = { ...DEFAULT_CLICK_PATTERN_CONFIG, ...config };
+
+  switch (cfg.accentMode) {
+    case 'all':
+      return 'normal';
+
+    case 'first':
+      return beatIndexInBar === 0 ? 'accent' : 'normal';
+
+    case 'backbeat': {
+      // The classic drummer practice pattern: a clap on beats 2 and 4 (1-indexed),
+      // nothing else. Generalizes to "every even-numbered beat" for other time
+      // signatures, which is an approximation outside 4/4.
+      const beatNumber = beatIndexInBar + 1;
+      return beatNumber % 2 === 0 ? 'clap' : 'mute';
+    }
+
+    case 'custom':
+      return cfg.customAccentBeats.includes(beatIndexInBar) ? 'accent' : 'normal';
+
+    default:
+      return 'normal';
+  }
+}
+
+/** Zero-indexed beat position within its bar, for a given absolute click index. */
+export function beatIndexInBar(clickIndex: number, beatsPerBar: number): number {
+  if (beatsPerBar <= 0) return 0;
+  return clickIndex % beatsPerBar;
+}
+
+/**
+ * Parse a user-facing, 1-indexed, comma-separated beat list (e.g. "1, 3")
+ * into validated zero-indexed beat positions within `beatsPerBar`. Silently
+ * drops anything out of range or non-numeric rather than throwing, since
+ * this is meant to parse live text-field input.
+ */
+export function parseCustomAccentBeats(input: string, beatsPerBar: number): number[] {
+  const seen = new Set<number>();
+  for (const token of input.split(',')) {
+    const n = Number(token.trim());
+    if (Number.isInteger(n) && n >= 1 && n <= beatsPerBar) {
+      seen.add(n - 1);
+    }
+  }
+  return Array.from(seen).sort((a, b) => a - b);
+}

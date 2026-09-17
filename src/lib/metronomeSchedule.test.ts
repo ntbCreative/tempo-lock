@@ -3,6 +3,7 @@ import {
   createBarCountdownState,
   updateBarCountdown,
   computeClickTimes,
+  computeSessionPosition,
   isDownbeat,
   type BarCountdownState,
 } from './metronomeSchedule';
@@ -138,5 +139,30 @@ describe('metronomeSchedule: downbeat detection', () => {
     const beatsPerBar = 4;
     const downbeats = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => isDownbeat(i, beatsPerBar));
     expect(downbeats).toEqual([true, false, false, false, true, false, false, false]);
+  });
+});
+
+describe('metronomeSchedule: session position', () => {
+  it('reports bar/beat position for an unlimited session', () => {
+    const pos = computeSessionPosition(9, 4, 0);
+    expect(pos).toEqual({ clickIndex: 9, barIndex: 2, beatInBar: 1, remainingBars: null, finished: false });
+  });
+
+  it('reports remaining bars for a fixed-length session', () => {
+    const pos = computeSessionPosition(9, 4, 8); // click 9 -> bar 2 (0-indexed), 8-bar session
+    expect(pos.remainingBars).toBe(6);
+    expect(pos.finished).toBe(false);
+  });
+
+  it('flags finished once the click reaches the end of the session', () => {
+    const pos = computeSessionPosition(32, 4, 8); // bar 8 (0-indexed) of an 8-bar session
+    expect(pos.finished).toBe(true);
+    expect(pos.remainingBars).toBe(0);
+  });
+
+  it('handles a 3/4 signature correctly', () => {
+    const pos = computeSessionPosition(7, 3, 0); // 7 = bar 2, beat 1 (0-indexed) in 3/4
+    expect(pos.barIndex).toBe(2);
+    expect(pos.beatInBar).toBe(1);
   });
 });

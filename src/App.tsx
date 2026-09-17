@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
+import type { AccentMode } from './lib/clickPattern';
 import './App.css';
 
 const RANGE_PRESETS: { label: string; min: number; max: number }[] = [
@@ -14,6 +15,21 @@ const METRONOME_BAR_OPTIONS: { label: string; value: 0 | 1 | 2 | 4 }[] = [
   { label: 'After 1 bar', value: 1 },
   { label: 'After 2 bars', value: 2 },
   { label: 'After 4 bars', value: 4 },
+];
+
+const SIGNATURE_OPTIONS: { label: string; beatsPerBar: number }[] = [
+  { label: '2/4', beatsPerBar: 2 },
+  { label: '3/4', beatsPerBar: 3 },
+  { label: '4/4', beatsPerBar: 4 },
+  { label: '5/4', beatsPerBar: 5 },
+  { label: '6/8', beatsPerBar: 6 },
+];
+
+const ACCENT_MODE_OPTIONS: { label: string; value: AccentMode }[] = [
+  { label: 'All beats', value: 'all' },
+  { label: 'Accent 1', value: 'first' },
+  { label: '2 & 4 clap', value: 'backbeat' },
+  { label: 'Custom', value: 'custom' },
 ];
 
 function statusLabel(status: string, continuityStatus: string): string {
@@ -49,7 +65,13 @@ function App() {
     resetTap,
     metronomeActive,
     metronomeBpm,
+    metronomePosition,
     stopMetronome,
+    manualBpm,
+    setManualBpm,
+    halveManualBpm,
+    doubleManualBpm,
+    playManualClick,
     isMicrophoneSupported,
   } = useTempoDetector();
 
@@ -107,13 +129,26 @@ function App() {
           </div>
         </div>
 
-        {isListening && settings.metronomeBars > 0 && (
+        {isListening && settings.metronomeBars > 0 && !metronomeActive && (
           <p className="notice notice--metronome">
-            {metronomeActive
-              ? `Click track running at ${metronomeBpm} BPM`
-              : continuity.status === 'locked'
+            {continuity.status === 'locked'
               ? `Counting in… click track starts after ${settings.metronomeBars} bar${settings.metronomeBars > 1 ? 's' : ''}`
               : 'Play steadily to start the count-in'}
+          </p>
+        )}
+
+        {metronomeActive && (
+          <p className="notice notice--metronome">
+            Click track at {metronomeBpm} BPM
+            {metronomePosition && (
+              <>
+                {' · Bar '}
+                {metronomePosition.barIndex + 1}
+                {metronomePosition.remainingBars !== null && ` (${metronomePosition.remainingBars} left)`}
+                {' · Beat '}
+                {metronomePosition.beatInBar + 1}/{settings.beatsPerBar}
+              </>
+            )}
           </p>
         )}
 
@@ -200,9 +235,64 @@ function App() {
             ))}
           </select>
         </div>
+      </section>
+
+      <section className="controls controls--click-track" aria-label="Click track settings">
+        <h2 className="controls__heading">Click Track</h2>
+
         <div className="control">
           <div className="control__label-row">
-            <label htmlFor="metronome-bars">Click track</label>
+            <label htmlFor="signature">Signature</label>
+          </div>
+          <select
+            id="signature"
+            value={settings.beatsPerBar}
+            onChange={(e) => updateSettings({ beatsPerBar: Number(e.target.value) })}
+          >
+            {SIGNATURE_OPTIONS.map((option) => (
+              <option key={option.label} value={option.beatsPerBar}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="control">
+          <div className="control__label-row">
+            <label htmlFor="accent-mode">Click mode</label>
+          </div>
+          <select
+            id="accent-mode"
+            value={settings.accentMode}
+            onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
+          >
+            {ACCENT_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {settings.accentMode === 'custom' && (
+          <div className="control">
+            <div className="control__label-row">
+              <label htmlFor="custom-beats">Accent beats (1–{settings.beatsPerBar})</label>
+            </div>
+            <input
+              id="custom-beats"
+              type="text"
+              inputMode="numeric"
+              placeholder="e.g. 1, 3"
+              value={settings.customAccentBeatsInput}
+              onChange={(e) => updateSettings({ customAccentBeatsInput: e.target.value })}
+            />
+          </div>
+        )}
+
+        <div className="control">
+          <div className="control__label-row">
+            <label htmlFor="metronome-bars">Auto-start after</label>
           </div>
           <select
             id="metronome-bars"
@@ -215,6 +305,54 @@ function App() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="control">
+          <div className="control__label-row">
+            <label htmlFor="session-length">Manual session length</label>
+            <span>{settings.clickTrackLengthBars === 0 ? 'Until stopped' : `${settings.clickTrackLengthBars} bars`}</span>
+          </div>
+          <input
+            id="session-length"
+            type="range"
+            min={0}
+            max={32}
+            step={1}
+            value={settings.clickTrackLengthBars}
+            onChange={(e) => updateSettings({ clickTrackLengthBars: Number(e.target.value) })}
+          />
+        </div>
+
+        <div className="manual-metronome">
+          <div className="manual-metronome__bpm-row">
+            <button type="button" className="pill-button" onClick={halveManualBpm} aria-label="Halve tempo">
+              ½×
+            </button>
+            <div className="manual-metronome__bpm">
+              <input
+                type="number"
+                min={settings.minBpm}
+                max={settings.maxBpm}
+                value={manualBpm}
+                onChange={(e) => setManualBpm(Number(e.target.value))}
+              />
+              <span>BPM</span>
+            </div>
+            <button type="button" className="pill-button" onClick={doubleManualBpm} aria-label="Double tempo">
+              2×
+            </button>
+          </div>
+          <input
+            type="range"
+            min={settings.minBpm}
+            max={settings.maxBpm}
+            step={1}
+            value={manualBpm}
+            onChange={(e) => setManualBpm(Number(e.target.value))}
+          />
+          <button type="button" className="big-button big-button--manual-click" onClick={playManualClick}>
+            Play Click
+          </button>
         </div>
       </section>
 

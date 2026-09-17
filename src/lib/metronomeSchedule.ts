@@ -120,3 +120,31 @@ export function computeClickTimes(startTimeSec: number, bpm: number, count: numb
 export function isDownbeat(clickIndex: number, beatsPerBar: number): boolean {
   return clickIndex % beatsPerBar === 0;
 }
+
+export interface SessionPosition {
+  clickIndex: number;
+  /** 0-indexed bar number. */
+  barIndex: number;
+  /** 0-indexed beat within the bar. */
+  beatInBar: number;
+  /** Bars left including the current one, or null when the session has no fixed length. */
+  remainingBars: number | null;
+  /** True once the click has reached the end of a fixed-length session. */
+  finished: boolean;
+}
+
+/**
+ * Where a finite (or unlimited) click-track session is at, given how many
+ * clicks have played so far. `totalBars` of 0 means "no fixed length" --
+ * runs until manually stopped, and `remainingBars`/`finished` reflect that.
+ * Pure so a UI position readout (bar/beat/remaining) can be computed and
+ * tested without touching the audio engine.
+ */
+export function computeSessionPosition(clickIndex: number, beatsPerBar: number, totalBars: number): SessionPosition {
+  const safeBeatsPerBar = beatsPerBar > 0 ? beatsPerBar : 1;
+  const barIndex = Math.floor(clickIndex / safeBeatsPerBar);
+  const beatInBar = clickIndex % safeBeatsPerBar;
+  const finished = totalBars > 0 && barIndex >= totalBars;
+  const remainingBars = totalBars > 0 ? Math.max(0, totalBars - barIndex) : null;
+  return { clickIndex, barIndex, beatInBar, remainingBars, finished };
+}

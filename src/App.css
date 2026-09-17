@@ -250,6 +250,91 @@ body {
   font-size: 15px;
 }
 
+.controls__heading {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
+.controls--click-track {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.control input[type='text'] {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.manual-metronome {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.manual-metronome__bpm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.manual-metronome__bpm {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.manual-metronome__bpm input {
+  width: 70px;
+  background: transparent;
+  border: none;
+  color: var(--amber);
+  font-family: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.manual-metronome__bpm span {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.pill-button {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pill-button:active {
+  transform: scale(0.96);
+}
+
+.big-button--manual-click {
+  background: var(--cyan);
+  color: #04211f;
+}
+
 .stage__footer {
   padding: 0 24px 24px;
   text-align: center;

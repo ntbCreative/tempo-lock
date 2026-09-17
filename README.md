@@ -33,24 +33,31 @@ Web-Audio wiring layer:
   independent of audio and the DOM.
 - `src/lib/tapTempo.ts` — manual Tap Tempo, using a trimmed median of
   recent tap intervals.
-- `src/lib/metronomeSchedule.ts` — "start a click track after N bars" logic.
-  A pure countdown that starts timing the moment the continuity tracker
-  reports `locked`, and fires once that lock has held for the chosen number
-  of bars at the tempo it locked at (so drift during the countdown doesn't
-  change the eventual click tempo). Also has the pure click-time scheduling
-  math used by the audio engine. Resets if the lock breaks before the
-  countdown finishes.
-- `src/audio/metronomeEngine.ts` — plays the actual click track once
-  triggered, using a standard Web-Audio lookahead scheduler for tight
-  timing, phase-aligned to the moment the lock began (not to whenever the
-  trigger check happened to run).
+- `src/lib/clickPattern.ts` — which sound each beat in a bar should play,
+  given an accent mode (all beats, accent-the-downbeat, "2 & 4 clap"
+  backbeat, or a custom list of accented beats) and a time signature. Pure
+  and signature-agnostic — `beatIndexInBar()` handles 3/4, 6/8, etc.
+- `src/lib/metronomeSchedule.ts` — click-track scheduling math: the
+  "start after N bars of steady playing" countdown (phase-aligned to when
+  the lock began, frozen at the tempo it locked at so drift during the
+  countdown doesn't change the eventual click tempo, and reset if the lock
+  breaks before it finishes), the click-time generator the audio engine
+  schedules from, and bar/beat/remaining-bars position math for
+  fixed-length sessions.
+- `src/audio/metronomeEngine.ts` — plays the actual click track, using a
+  standard Web-Audio lookahead scheduler for tight timing. Supports the
+  accent patterns above (including a synthesized noise-burst "clap" for
+  backbeat mode), a configurable time signature, and either an open-ended
+  session or a fixed bar count that auto-stops and reports its own
+  bar/beat position for the UI to poll.
 - `src/audio/liveTempoEngine.ts` — the only file that touches
   `getUserMedia`/`AudioContext`. Pulls raw mic samples, runs them through
   the onset detector, periodically re-estimates tempo over a trailing
   8-second onset window, and feeds every estimate into the continuity
   tracker. Resets all state on start/stop.
-- `src/hooks/useTempoDetector.ts` — React hook wrapping the engine + tap
-  tempo for the UI.
+- `src/hooks/useTempoDetector.ts` — React hook wrapping the live engine,
+  tap tempo, the auto-start countdown, and a manual metronome (arbitrary
+  BPM, half/double buttons, play/stop) for the UI.
 - `src/App.tsx` / `src/App.css` — the interface itself.
 
 ## Testing
@@ -64,7 +71,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (58 tests as of this build).
+Run `npm run test` for the full suite (76 tests as of this build).
 
 ## Known real-world limitations
 
@@ -89,9 +96,11 @@ real kit has not been measured. In particular:
   consensus window (roughly half a second, given the 150ms analysis
   interval) will lag behind by design — that lag is what prevents the
   display from flickering on noise.
-- **Click track**: assumes 4/4 (4 beats per bar). The countdown restarts
-  from zero if the lock breaks before it finishes, so playing unsteadily
-  during the count-in bars will delay the click track rather than start it
-  early or late. Once it's playing, it keeps going at a fixed tempo until
-  you stop it or stop listening — it doesn't continue tracking your tempo
-  after it kicks in.
+- **Click track**: the auto-start countdown restarts from zero if the lock
+  breaks before it finishes, so playing unsteadily during the count-in
+  bars will delay the click track rather than start it early or late. Once
+  it's playing, it keeps going at a fixed tempo until you stop it, stop
+  listening, or it reaches the end of a fixed-length session — it doesn't
+  continue tracking your tempo after it kicks in. "2 & 4 clap" mode is
+  tuned for 4/4 (even-numbered beats); in other signatures it's an
+  approximation rather than a real backbeat pattern.
