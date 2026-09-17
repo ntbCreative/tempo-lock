@@ -56,7 +56,11 @@ export const DEFAULT_CONTINUITY_CONFIG: ContinuityConfig = {
   agreementTolerance: 0.05,
   requiredConsecutive: 3,
   minConfidenceToAccept: 0.35,
-  minOnsetsToAccept: 4,
+  // Requiring a bit more onset evidence before accepting ANY estimate
+  // reduces the chance that a handful of incidental transients right as
+  // listening starts (handling noise, a stray hit) alone produce a
+  // confidently-accepted-but-wrong initial tempo.
+  minOnsetsToAccept: 6,
   lowConfidenceThreshold: 0.4,
 };
 

@@ -59,7 +59,12 @@ export const DEFAULT_PEAK_PICKING_CONFIG: PeakPickingConfig = {
   hopSeconds: 0.01,
   medianWindowFrames: 50,
   thresholdMultiplier: 1.5,
-  minIntervalSeconds: 0.1,
+  // A hard hit on a resonant surface (e.g. a stick tapped on a table) can
+  // ring/bounce for 100ms+ after the initial transient, which a too-short
+  // debounce reads as a second, spurious onset -- doubling (or worse) the
+  // apparent tempo from a single hit. 150ms still comfortably permits a
+  // genuine 240 BPM tempo (250ms between beats) through untouched.
+  minIntervalSeconds: 0.15,
 };
 
 /** Adaptive-threshold local-maximum peak picker over an onset envelope. Returns onset times in seconds. */

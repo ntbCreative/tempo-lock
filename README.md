@@ -117,7 +117,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (134 tests as of this build).
+Run `npm run test` for the full suite (145 tests as of this build).
 
 ## Known real-world limitations
 
@@ -193,6 +193,26 @@ real kit has not been measured. In particular:
   automated test the way the modules above are — worth specifically
   re-confirming: stop the click, wait several seconds while still
   listening, and check it stays stopped.
+- **Immediate/wrong-tempo auto-start fix (this build)**: two related
+  issues could combine to make the click track fire almost immediately at
+  an implausibly fast tempo. First, tapping on a hard, resonant surface
+  (a table) can ring/bounce after the initial hit, and the onset detector's
+  debounce window (100ms) was short enough that the bounce could register
+  as a second, spurious onset — roughly doubling the apparent tempo from a
+  single tap. The debounce is now 150ms (still comfortably permits a
+  genuine 240 BPM tempo through). Second, once the auto-start countdown
+  begins, its quiet count-in clicks play while the mic is still actively
+  listening; if the device's speaker output reaches its own microphone,
+  those clicks could be picked up as new "evidence," repeatedly resetting
+  the countdown at a progressively faster, self-reinforcing tempo. The
+  countdown's tempo reading is now frozen at whatever value started it for
+  as long as the count-in is playing, closing that feedback path. Also
+  raised the minimum onsets required before accepting any tempo reading at
+  all (4 → 6), as a general hedge against a handful of incidental
+  transients right as listening starts producing a confident-looking but
+  wrong initial lock. The debounce fix has direct test coverage in the new
+  `onsetDetection.test.ts`; the count-in feedback fix, like the one above,
+  is hook-level wiring and isn't automated-tested.
 - **Count-in**: covers exactly the auto-start countdown's bars and stops
   itself right as the full-volume click track begins — both are computed
   from the same numbers, so they should hand off cleanly, but this hasn't

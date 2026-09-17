@@ -207,9 +207,22 @@ export function useTempoDetector() {
 
         const cfg = settingsRef.current;
         const previousState = barCountdownRef.current;
+
+        // While our own count-in audio is playing, don't let it (if the mic
+        // happens to pick up the device's own speaker output) feed back into
+        // the tempo reading and corrupt or restart the countdown. Once
+        // started, completion is purely time-based, so freezing the bpm
+        // input here only prevents a feedback-driven drift-reset -- it
+        // doesn't change when a genuine countdown finishes.
+        const isCountInPlaying = countInEngineRef.current?.isRunning() ?? false;
+        const bpmForCountdown =
+          isCountInPlaying && previousState.lockStartBpm !== null
+            ? previousState.lockStartBpm
+            : state.continuity.displayedBpm;
+
         const result = updateBarCountdown(
           previousState,
-          state.continuity.displayedBpm,
+          bpmForCountdown,
           performance.now() / 1000,
           { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar }
         );
