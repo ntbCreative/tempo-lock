@@ -1,0 +1,268 @@
+:root {
+  --bg: #08090a;
+  --bg-raised: #131517;
+  --line: #23262a;
+  --text: #f2f1ed;
+  --text-dim: #8b8f94;
+  --amber: #ffb020;
+  --amber-dim: #6b4a10;
+  --cyan: #4fd8e0;
+  --red: #ff5a4e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
+}
+
+.stage__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 8px;
+}
+
+.stage__brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.stage__status {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+
+.stage__status--locked {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+}
+
+.stage__status--weak {
+  color: var(--red);
+  border-color: #4a1f1c;
+}
+
+.stage__status--finding {
+  color: var(--cyan);
+  border-color: #1f4a4c;
+}
+
+.stage__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 12px 24px 24px;
+}
+
+.bpm-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  line-height: 1;
+}
+
+.bpm-readout__value {
+  font-family: 'DM Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: min(30vw, 168px);
+  font-weight: 500;
+  color: var(--amber);
+  text-shadow: 0 0 40px rgba(255, 176, 32, 0.25);
+}
+
+.bpm-readout__unit {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+.meter-row {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  gap: 16px;
+}
+
+.meter {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.meter__label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.meter__track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--text-dim);
+  transition: width 150ms ease-out;
+}
+
+.meter__fill--locked {
+  background: var(--amber);
+}
+
+.meter__fill--weak {
+  background: var(--red);
+}
+
+.meter__fill--finding {
+  background: var(--cyan);
+}
+
+.meter__fill--signal {
+  background: var(--cyan);
+}
+
+.notice {
+  max-width: 420px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.notice--warning {
+  color: var(--red);
+}
+
+.notice--metronome {
+  color: var(--cyan);
+}
+
+.big-button--stop-metronome {
+  background: var(--bg-raised);
+  color: var(--cyan);
+  border: 1px solid #1f4a4c;
+}
+
+.big-button {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  border-radius: 16px;
+  border: none;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 80ms ease-out, filter 120ms ease-out;
+}
+
+.big-button:active {
+  transform: scale(0.98);
+}
+
+.big-button--start {
+  background: var(--amber);
+  color: #1a1200;
+}
+
+.big-button--stop {
+  background: var(--red);
+  color: #260603;
+}
+
+.big-button--tap {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.big-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 24px 20px;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.control__label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.control__label-row label {
+  color: var(--text);
+}
+
+.control input[type='range'] {
+  width: 100%;
+  height: 32px;
+  accent-color: var(--amber);
+  background: transparent;
+}
+
+.control select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.stage__footer {
+  padding: 0 24px 24px;
+  text-align: center;
+}
+
+.privacy-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .bpm-readout__value {
+    font-size: 140px;
+  }
+}

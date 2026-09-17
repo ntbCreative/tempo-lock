@@ -1,0 +1,17 @@
+{
+  "name": "Tempo Lock",
+  "short_name": "Tempo Lock",
+  "description": "Live BPM detector for musicians and drummers.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08090a",
+  "theme_color": "#08090a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
