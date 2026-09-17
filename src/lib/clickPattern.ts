@@ -58,6 +58,32 @@ export function beatIndexInBar(clickIndex: number, beatsPerBar: number): number 
 }
 
 /**
+ * Which synthesized percussion voice the click track uses. All synthesized
+ * in-browser (oscillators/filtered noise) -- no sample playback, so no
+ * licensing concerns and no asset loading.
+ */
+export type SoundKit = 'digital' | 'woodblock' | 'rimshot' | 'cowbell' | 'hihat' | 'clave';
+
+export const SOUND_KITS: { label: string; value: SoundKit }[] = [
+  { label: 'Digital', value: 'digital' },
+  { label: 'Woodblock', value: 'woodblock' },
+  { label: 'Rimshot', value: 'rimshot' },
+  { label: 'Cowbell', value: 'cowbell' },
+  { label: 'Hi-Hat', value: 'hihat' },
+  { label: 'Clave', value: 'clave' },
+];
+
+/**
+ * For a 'clap' hit (backbeat mode), the digital kit keeps its distinct airy
+ * hand-clap sound; every other kit just plays its own accented voice on the
+ * backbeat instead (a woodblock kit's backbeat is an accented woodblock
+ * hit, not a generic clap sound layered on top of a different timbre).
+ */
+export function clapVoiceForKit(kit: SoundKit): 'digital-clap' | 'kit-accent' {
+  return kit === 'digital' ? 'digital-clap' : 'kit-accent';
+}
+
+/**
  * Parse a user-facing, 1-indexed, comma-separated beat list (e.g. "1, 3")
  * into validated zero-indexed beat positions within `beatsPerBar`. Silently
  * drops anything out of range or non-numeric rather than throwing, since

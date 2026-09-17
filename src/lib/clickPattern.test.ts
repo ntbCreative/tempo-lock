@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats } from './clickPattern';
+import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats, clapVoiceForKit } from './clickPattern';
 
 describe('clickPattern: accent modes', () => {
   it('"all" plays every beat as a plain click with no accent', () => {
@@ -71,5 +71,19 @@ describe('clickPattern: parseCustomAccentBeats', () => {
 
   it('returns an empty array for empty input', () => {
     expect(parseCustomAccentBeats('', 4)).toEqual([]);
+  });
+});
+
+describe('clickPattern: clapVoiceForKit', () => {
+  it('keeps the dedicated clap sound for the digital kit', () => {
+    expect(clapVoiceForKit('digital')).toBe('digital-clap');
+  });
+
+  it('falls back to the kit\'s own accent voice for every other kit', () => {
+    expect(clapVoiceForKit('woodblock')).toBe('kit-accent');
+    expect(clapVoiceForKit('rimshot')).toBe('kit-accent');
+    expect(clapVoiceForKit('cowbell')).toBe('kit-accent');
+    expect(clapVoiceForKit('hihat')).toBe('kit-accent');
+    expect(clapVoiceForKit('clave')).toBe('kit-accent');
   });
 });

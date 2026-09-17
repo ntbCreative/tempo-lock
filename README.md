@@ -36,7 +36,9 @@ Web-Audio wiring layer:
 - `src/lib/clickPattern.ts` — which sound each beat in a bar should play,
   given an accent mode (all beats, accent-the-downbeat, "2 & 4 clap"
   backbeat, or a custom list of accented beats) and a time signature. Pure
-  and signature-agnostic — `beatIndexInBar()` handles 3/4, 6/8, etc.
+  and signature-agnostic — `beatIndexInBar()` handles 3/4, 6/8, etc. Also
+  defines the synthesized sound kits (Digital, Woodblock, Rimshot, Cowbell,
+  Hi-Hat, Clave) and which voice a backbeat "clap" hit uses per kit.
 - `src/lib/metronomeSchedule.ts` — click-track scheduling math: the
   "start after N bars of steady playing" countdown (phase-aligned to when
   the lock began, frozen at the tempo it locked at so drift during the
@@ -44,21 +46,57 @@ Web-Audio wiring layer:
   breaks before it finishes), the click-time generator the audio engine
   schedules from, and bar/beat/remaining-bars position math for
   fixed-length sessions.
+- `src/lib/layoutOrder.ts` — the pure array-reorder helper behind the
+  Settings screen's drag-to-reorder section list.
+- `src/lib/settingsStorage.ts` — pure parse/merge logic for restoring
+  persisted settings, theme, and section order from `localStorage`, safe
+  against missing or corrupted stored values.
+- `src/lib/themes.ts` — the color theme definitions (id, label, swatch hex)
+  shared between the theme picker and the `[data-theme]` CSS overrides in
+  `App.css`.
 - `src/audio/metronomeEngine.ts` — plays the actual click track, using a
   standard Web-Audio lookahead scheduler for tight timing. Supports the
-  accent patterns above (including a synthesized noise-burst "clap" for
-  backbeat mode), a configurable time signature, and either an open-ended
-  session or a fixed bar count that auto-stops and reports its own
-  bar/beat position for the UI to poll.
+  accent patterns and sound kits above, a configurable time signature, and
+  either an open-ended session or a fixed bar count that auto-stops and
+  reports its own bar/beat position for the UI to poll. All percussion
+  voices are synthesized (oscillators + filtered noise) — no samples.
+- `src/audio/silentAudio.ts` — generates a tiny silent WAV at runtime, used
+  only to give Safari's AirPlay route picker a valid `<audio>` element to
+  attach to.
 - `src/audio/liveTempoEngine.ts` — the only file that touches
   `getUserMedia`/`AudioContext`. Pulls raw mic samples, runs them through
   the onset detector, periodically re-estimates tempo over a trailing
   8-second onset window, and feeds every estimate into the continuity
   tracker. Resets all state on start/stop.
 - `src/hooks/useTempoDetector.ts` — React hook wrapping the live engine,
-  tap tempo, the auto-start countdown, and a manual metronome (arbitrary
-  BPM, half/double buttons, play/stop) for the UI.
-- `src/App.tsx` / `src/App.css` — the interface itself.
+  tap tempo, the auto-start countdown, a manual metronome (arbitrary BPM,
+  half/double buttons, play/stop), and settings/theme/section-order state
+  (persisted to `localStorage`).
+- `src/App.tsx` / `src/App.css` — the main performance screen (BPM readout,
+  meters, Start/Stop, Tap Tempo, manual click controls) plus the color
+  theme CSS variables.
+- `src/Settings.tsx` — the settings overlay: Detector, Click Track, Sounds,
+  and Appearance sections, each collapsible/reorderable by dragging its
+  handle; the theme swatch picker; the sound kit selector; and the AirPlay
+  button.
+
+## Features
+
+- Live BPM detection from mic input, with a locked/finding/low-confidence
+  status and a smoothed, jump-resistant display.
+- Tap Tempo, independent of the detector.
+- A configurable click track: time signature (2/4–6/8), accent mode (all
+  beats, accent-the-downbeat, "2 & 4 clap" backbeat, or custom beats), and
+  a choice of synthesized percussion sounds.
+- Two ways to start the click track: automatically after N bars of steady
+  playing (phase-aligned to when the lock began), or manually at any BPM
+  with half/double buttons and an optional fixed session length with a
+  live bar/beat/remaining readout.
+- Settings screen with drag-to-reorder sections, 5 color themes, and (on
+  Safari/Apple devices) an in-app AirPlay device picker.
+- Settings, theme, and section order persist across reloads via
+  `localStorage`.
+- Installable as a PWA.
 
 ## Testing
 
@@ -71,7 +109,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (76 tests as of this build).
+Run `npm run test` for the full suite (93 tests as of this build).
 
 ## Known real-world limitations
 
@@ -104,3 +142,17 @@ real kit has not been measured. In particular:
   continue tracking your tempo after it kicks in. "2 & 4 clap" mode is
   tuned for 4/4 (even-numbered beats); in other signatures it's an
   approximation rather than a real backbeat pattern.
+- **AirPlay**: the in-app device picker uses `webkitShowPlaybackTargetPicker`,
+  a Safari/Apple-only browser API — it won't appear on Chrome, Firefox, or
+  Android at all (feature-detected, so it just shows a note there instead).
+  Picking a device there summons the *system* route picker; it doesn't pipe
+  audio through a separate path, so it's a convenience button, not a
+  requirement — routing to AirPlay/Bluetooth speakers via the device's own
+  system audio controls works identically without it.
+- **Sound kits**: all six (Digital, Woodblock, Rimshot, Cowbell, Hi-Hat,
+  Clave) are synthesized from oscillators and filtered noise, not sampled
+  recordings, so they're a reasonable approximation of the real instrument
+  rather than a recording of one.
+- **Settings persistence**: stored in `localStorage`, so it's per-browser,
+  per-device — it won't sync between your phone and a laptop, and clearing
+  site data resets it to defaults.

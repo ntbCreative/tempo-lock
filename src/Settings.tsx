@@ -1,0 +1,342 @@
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
+import type { AccentMode, SoundKit } from './lib/clickPattern';
+import { SOUND_KITS } from './lib/clickPattern';
+import { THEMES, type ThemeId } from './lib/themes';
+import { createSilentWavDataUri } from './audio/silentAudio';
+
+const RANGE_PRESETS: { label: string; min: number; max: number }[] = [
+  { label: 'Full · 40–240', min: 40, max: 240 },
+  { label: 'Ballad · 40–100', min: 40, max: 100 },
+  { label: 'Mid · 80–160', min: 80, max: 160 },
+  { label: 'Up-tempo · 140–240', min: 140, max: 240 },
+];
+
+const METRONOME_BAR_OPTIONS: { label: string; value: 0 | 1 | 2 | 4 }[] = [
+  { label: 'Off', value: 0 },
+  { label: 'After 1 bar', value: 1 },
+  { label: 'After 2 bars', value: 2 },
+  { label: 'After 4 bars', value: 4 },
+];
+
+const SIGNATURE_OPTIONS: { label: string; beatsPerBar: number }[] = [
+  { label: '2/4', beatsPerBar: 2 },
+  { label: '3/4', beatsPerBar: 3 },
+  { label: '4/4', beatsPerBar: 4 },
+  { label: '5/4', beatsPerBar: 5 },
+  { label: '6/8', beatsPerBar: 6 },
+];
+
+const ACCENT_MODE_OPTIONS: { label: string; value: AccentMode }[] = [
+  { label: 'All beats', value: 'all' },
+  { label: 'Accent 1', value: 'first' },
+  { label: '2 & 4 clap', value: 'backbeat' },
+  { label: 'Custom', value: 'custom' },
+];
+
+const SECTION_TITLES: Record<SettingsSectionId, string> = {
+  detector: 'Detector',
+  clickTrack: 'Click Track',
+  sounds: 'Sounds',
+  appearance: 'Appearance',
+};
+
+interface SettingsProps {
+  settings: DetectorSettings;
+  updateSettings: (partial: Partial<DetectorSettings>) => void;
+  theme: ThemeId;
+  setTheme: (theme: ThemeId) => void;
+  sectionOrder: SettingsSectionId[];
+  reorderSections: (fromIndex: number, toIndex: number) => void;
+  onClose: () => void;
+}
+
+function DetectorSection({ settings, updateSettings }: SettingsProps) {
+  return (
+    <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="smoothing">Smoothing</label>
+          <span>{Math.round(settings.smoothing * 100)}%</span>
+        </div>
+        <input
+          id="smoothing"
+          type="range"
+          min={0.05}
+          max={0.6}
+          step={0.01}
+          value={settings.smoothing}
+          onChange={(e) => updateSettings({ smoothing: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="sensitivity">Input sensitivity</label>
+          <span>{Math.round(settings.sensitivity * 100)}%</span>
+        </div>
+        <input
+          id="sensitivity"
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={settings.sensitivity}
+          onChange={(e) => updateSettings({ sensitivity: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="range">Tempo range</label>
+        </div>
+        <select
+          id="range"
+          value={`${settings.minBpm}-${settings.maxBpm}`}
+          onChange={(e) => {
+            const [min, max] = e.target.value.split('-').map(Number);
+            updateSettings({ minBpm: min, maxBpm: max });
+          }}
+        >
+          {RANGE_PRESETS.map((preset) => (
+            <option key={preset.label} value={`${preset.min}-${preset.max}`}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
+  return (
+    <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="signature">Signature</label>
+        </div>
+        <select
+          id="signature"
+          value={settings.beatsPerBar}
+          onChange={(e) => updateSettings({ beatsPerBar: Number(e.target.value) })}
+        >
+          {SIGNATURE_OPTIONS.map((option) => (
+            <option key={option.label} value={option.beatsPerBar}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="accent-mode">Click mode</label>
+        </div>
+        <select
+          id="accent-mode"
+          value={settings.accentMode}
+          onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
+        >
+          {ACCENT_MODE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {settings.accentMode === 'custom' && (
+        <div className="control">
+          <div className="control__label-row">
+            <label htmlFor="custom-beats">Accent beats (1–{settings.beatsPerBar})</label>
+          </div>
+          <input
+            id="custom-beats"
+            type="text"
+            inputMode="numeric"
+            placeholder="e.g. 1, 3"
+            value={settings.customAccentBeatsInput}
+            onChange={(e) => updateSettings({ customAccentBeatsInput: e.target.value })}
+          />
+        </div>
+      )}
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="metronome-bars">Auto-start after</label>
+        </div>
+        <select
+          id="metronome-bars"
+          value={settings.metronomeBars}
+          onChange={(e) => updateSettings({ metronomeBars: Number(e.target.value) as 0 | 1 | 2 | 4 })}
+        >
+          {METRONOME_BAR_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="session-length">Manual session length</label>
+          <span>{settings.clickTrackLengthBars === 0 ? 'Until stopped' : `${settings.clickTrackLengthBars} bars`}</span>
+        </div>
+        <input
+          id="session-length"
+          type="range"
+          min={0}
+          max={32}
+          step={1}
+          value={settings.clickTrackLengthBars}
+          onChange={(e) => updateSettings({ clickTrackLengthBars: Number(e.target.value) })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SoundsSection({ settings, updateSettings }: SettingsProps) {
+  return (
+    <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="sound-kit">Click sound</label>
+        </div>
+        <select
+          id="sound-kit"
+          value={settings.soundKit}
+          onChange={(e) => updateSettings({ soundKit: e.target.value as SoundKit })}
+        >
+          {SOUND_KITS.map((kit) => (
+            <option key={kit.value} value={kit.value}>
+              {kit.label}
+            </option>
+          ))}
+        </select>
+        <p className="settings-note">
+          {settings.soundKit === 'digital'
+            ? '2 & 4 clap mode uses a dedicated clap sound.'
+            : '2 & 4 clap mode plays this sound, accented, on beats 2 and 4.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AppearanceSection({ theme, setTheme }: SettingsProps) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [airplaySupported, setAirplaySupported] = useState(false);
+  const [silentSrc] = useState(createSilentWavDataUri);
+
+  useEffect(() => {
+    const el = audioRef.current as (HTMLAudioElement & { webkitShowPlaybackTargetPicker?: () => void }) | null;
+    setAirplaySupported(!!el && typeof el.webkitShowPlaybackTargetPicker === 'function');
+  }, []);
+
+  const showAirplayPicker = () => {
+    const el = audioRef.current as (HTMLAudioElement & { webkitShowPlaybackTargetPicker?: () => void }) | null;
+    el?.play().catch(() => undefined);
+    el?.webkitShowPlaybackTargetPicker?.();
+  };
+
+  return (
+    <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <label>Color theme</label>
+        </div>
+        <div className="theme-swatches">
+          {THEMES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className="theme-swatch"
+              data-active={theme === option.id}
+              style={{ background: option.swatch }}
+              aria-label={option.label}
+              onClick={() => setTheme(option.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label>AirPlay</label>
+        </div>
+        {airplaySupported ? (
+          <button type="button" className="airplay-button" onClick={showAirplayPicker}>
+            Choose Speaker or AirPlay Device
+          </button>
+        ) : (
+          <p className="settings-note">
+            The in-app AirPlay picker only works in Safari on Apple devices. On other browsers, route audio to
+            AirPlay/Bluetooth speakers from your device's system audio controls instead — it works the same way,
+            just outside the app.
+          </p>
+        )}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <audio ref={audioRef} src={silentSrc} muted playsInline style={{ display: 'none' }} />
+      </div>
+    </div>
+  );
+}
+
+const SECTION_RENDERERS: Record<SettingsSectionId, (props: SettingsProps) => ReactElement> = {
+  detector: DetectorSection,
+  clickTrack: ClickTrackSection,
+  sounds: SoundsSection,
+  appearance: AppearanceSection,
+};
+
+export default function Settings(props: SettingsProps) {
+  const { sectionOrder, reorderSections, onClose } = props;
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+
+  return (
+    <div className="settings-overlay" onClick={onClose}>
+      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-panel__header">
+          <span className="settings-panel__title">Settings</span>
+          <button type="button" className="settings-panel__close" onClick={onClose} aria-label="Close settings">
+            ✕
+          </button>
+        </div>
+        <p className="settings-note">Drag a section's handle to reorder it.</p>
+
+        {sectionOrder.map((sectionId, index) => {
+          const Renderer = SECTION_RENDERERS[sectionId];
+          return (
+            <div
+              key={sectionId}
+              className="settings-section"
+              data-dragging={draggingIndex === index}
+              draggable
+              onDragStart={() => setDraggingIndex(index)}
+              onDragEnd={() => setDraggingIndex(null)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggingIndex !== null && draggingIndex !== index) {
+                  reorderSections(draggingIndex, index);
+                }
+                setDraggingIndex(null);
+              }}
+            >
+              <div className="settings-section__handle">
+                <span className="settings-section__grip" aria-hidden="true">
+                  ⠿
+                </span>
+                <span className="settings-section__title">{SECTION_TITLES[sectionId]}</span>
+              </div>
+              <Renderer {...props} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

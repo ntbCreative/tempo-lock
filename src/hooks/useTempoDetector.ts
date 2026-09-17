@@ -8,10 +8,21 @@ import {
   type BarCount,
   type BarCountdownState,
 } from '../lib/metronomeSchedule';
-import { parseCustomAccentBeats, type AccentMode } from '../lib/clickPattern';
+import { parseCustomAccentBeats, type AccentMode, type SoundKit } from '../lib/clickPattern';
 import { createTapTempoState, registerTap, type TapTempoState } from '../lib/tapTempo';
+import { parseStoredSettings, serializeSettings } from '../lib/settingsStorage';
+import { moveItem } from '../lib/layoutOrder';
+import { DEFAULT_THEME, type ThemeId } from '../lib/themes';
 
 const POSITION_POLL_MS = 100;
+
+const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
+const THEME_STORAGE_KEY = 'tempo-lock:theme';
+const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
+
+export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'appearance';
+
+export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'appearance'];
 
 export interface DetectorSettings {
   smoothing: number; // 0-1
@@ -28,6 +39,8 @@ export interface DetectorSettings {
   customAccentBeatsInput: string;
   /** Bars a manually-started click track should run for; 0 means "until stopped". */
   clickTrackLengthBars: number;
+  /** Which synthesized percussion voice the click track uses. */
+  soundKit: SoundKit;
 }
 
 export const DEFAULT_SETTINGS: DetectorSettings = {
@@ -40,10 +53,29 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   accentMode: 'first',
   customAccentBeatsInput: '1',
   clickTrackLengthBars: 0,
+  soundKit: 'digital',
 };
 
+function loadInitialSettings(): DetectorSettings {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  return parseStoredSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY), DEFAULT_SETTINGS);
+}
+
+function loadInitialTheme(): ThemeId {
+  if (typeof window === 'undefined') return DEFAULT_THEME;
+  return parseStoredSettings(window.localStorage.getItem(THEME_STORAGE_KEY), { theme: DEFAULT_THEME }).theme;
+}
+
+function loadInitialSectionOrder(): SettingsSectionId[] {
+  if (typeof window === 'undefined') return DEFAULT_SECTION_ORDER;
+  return parseStoredSettings(window.localStorage.getItem(SECTION_ORDER_STORAGE_KEY), { order: DEFAULT_SECTION_ORDER })
+    .order;
+}
+
 export function useTempoDetector() {
-  const [settings, setSettings] = useState<DetectorSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<DetectorSettings>(loadInitialSettings);
+  const [theme, setThemeState] = useState<ThemeId>(loadInitialTheme);
+  const [sectionOrder, setSectionOrder] = useState<SettingsSectionId[]>(loadInitialSectionOrder);
   const [engineState, setEngineState] = useState<EngineState>({
     status: 'idle',
     continuity: createContinuityState(),
@@ -94,6 +126,19 @@ export function useTempoDetector() {
     settingsRef.current = settings;
   }, [settings]);
 
+  // Persist settings/theme/section order across reloads.
+  useEffect(() => {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, serializeSettings(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, serializeSettings({ theme }));
+  }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SECTION_ORDER_STORAGE_KEY, serializeSettings({ order: sectionOrder }));
+  }, [sectionOrder]);
+
   useEffect(() => {
     engineRef.current = new LiveTempoEngine({
       ...settings,
@@ -131,6 +176,7 @@ export function useTempoDetector() {
             beatsPerBar: cfg.beatsPerBar,
             accentMode: cfg.accentMode,
             customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
+            soundKit: cfg.soundKit,
             totalBars: 0, // an auto-triggered click track runs until stopped, not a fixed length
           });
           setMetronomeActive(true);
@@ -182,6 +228,14 @@ export function useTempoDetector() {
     setSettings((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  const setTheme = useCallback((next: ThemeId) => {
+    setThemeState(next);
+  }, []);
+
+  const reorderSections = useCallback((fromIndex: number, toIndex: number) => {
+    setSectionOrder((prev) => moveItem(prev, fromIndex, toIndex));
+  }, []);
+
   const setManualBpm = useCallback(
     (bpm: number) => {
       setManualBpmState(Math.round(clampBpm(bpm)));
@@ -208,6 +262,7 @@ export function useTempoDetector() {
       beatsPerBar: cfg.beatsPerBar,
       accentMode: cfg.accentMode,
       customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
+      soundKit: cfg.soundKit,
       totalBars: cfg.clickTrackLengthBars,
       onFinished: () => {
         setMetronomeActive(false);
@@ -223,6 +278,10 @@ export function useTempoDetector() {
   return {
     settings,
     updateSettings,
+    theme,
+    setTheme,
+    sectionOrder,
+    reorderSections,
     engineState,
     start,
     stop,

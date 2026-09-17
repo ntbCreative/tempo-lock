@@ -1,5 +1,12 @@
 import { computeClickTimes, computeSessionPosition } from '../lib/metronomeSchedule';
-import { resolveClickSound, beatIndexInBar as computeBeatIndexInBar, type AccentMode, type ClickSound } from '../lib/clickPattern';
+import {
+  resolveClickSound,
+  beatIndexInBar as computeBeatIndexInBar,
+  clapVoiceForKit,
+  type AccentMode,
+  type ClickSound,
+  type SoundKit,
+} from '../lib/clickPattern';
 
 /**
  * Plays an audible metronome click track at a fixed BPM, starting at a given
@@ -12,6 +19,9 @@ import { resolveClickSound, beatIndexInBar as computeBeatIndexInBar, type Accent
  * repeatedly tops up a short window of precisely-timed clicks scheduled via
  * the AudioContext clock, which is far more accurate than timing audio
  * playback directly off setInterval/setTimeout.
+ *
+ * All percussion voices are synthesized (oscillators + filtered noise) --
+ * no sample playback, so no asset loading and no licensing concerns.
  */
 
 const LOOKAHEAD_SEC = 0.1; // how far ahead we schedule
@@ -26,6 +36,7 @@ export interface MetronomeStartOptions {
   beatsPerBar?: number;
   accentMode?: AccentMode;
   customAccentBeats?: number[];
+  soundKit?: SoundKit;
   /** Bars the session should run for; 0 (default) means "until stopped". */
   totalBars?: number;
   /** Called once, when a fixed-length session reaches its end and stops itself. */
@@ -41,12 +52,13 @@ export interface MetronomePosition {
 export class MetronomeEngine {
   private audioContext: AudioContext | null = null;
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
-  private perfToAudioOffset = 0; // audioContext.currentTime - perfSeconds, sampled once at start
+  private perfToAudioOffset = 0;
   private nextClickIndex = 0;
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
   private customAccentBeats: number[] = [];
+  private soundKit: SoundKit = 'digital';
   private totalBars = 0;
   private onFinished: (() => void) | undefined;
   private startPerfSec = 0;
@@ -74,6 +86,7 @@ export class MetronomeEngine {
     this.beatsPerBar = options.beatsPerBar ?? 4;
     this.accentMode = options.accentMode ?? 'first';
     this.customAccentBeats = options.customAccentBeats ?? [];
+    this.soundKit = options.soundKit ?? 'digital';
     this.totalBars = options.totalBars ?? 0;
     this.onFinished = options.onFinished;
     this.startPerfSec = startAtPerfSec;
@@ -81,7 +94,6 @@ export class MetronomeEngine {
     this.running = true;
 
     this.schedulerTimer = setInterval(() => this.scheduleUpcomingClicks(), SCHEDULER_INTERVAL_MS);
-    // Run once immediately so the very first click (which may be due right away) isn't delayed.
     this.scheduleUpcomingClicks();
   }
 
@@ -97,7 +109,6 @@ export class MetronomeEngine {
     this.running = false;
   }
 
-  /** Current bar/beat position, derived from real elapsed time (what's audibly playing right now), for UI polling. */
   getPosition(): MetronomePosition | null {
     if (!this.running) return null;
     const elapsedSec = Math.max(0, nowSeconds() - this.startPerfSec);
@@ -122,7 +133,6 @@ export class MetronomeEngine {
 
       const sessionPos = computeSessionPosition(this.nextClickIndex, this.beatsPerBar, this.totalBars);
       if (sessionPos.finished) {
-        // Reached the end of a fixed-length session: stop and notify, without scheduling further clicks.
         const onFinished = this.onFinished;
         this.stop();
         onFinished?.();
@@ -145,34 +155,71 @@ export class MetronomeEngine {
 
   private playClick(audioTime: number, sound: ClickSound): void {
     if (sound === 'mute') return;
+
     if (sound === 'clap') {
-      this.playClap(audioTime);
+      if (clapVoiceForKit(this.soundKit) === 'digital-clap') {
+        this.playNoiseBurst(audioTime, { freq: 1800, q: 0.9, peak: 0.5, duration: 0.07 });
+      } else {
+        this.playKitVoice(audioTime, true);
+      }
       return;
     }
 
+    this.playKitVoice(audioTime, sound === 'accent');
+  }
+
+  private playKitVoice(audioTime: number, accent: boolean): void {
+    switch (this.soundKit) {
+      case 'digital':
+        this.playDigital(audioTime, accent);
+        break;
+      case 'woodblock':
+        this.playWoodblock(audioTime, accent);
+        break;
+      case 'rimshot':
+        this.playRimshot(audioTime, accent);
+        break;
+      case 'cowbell':
+        this.playCowbell(audioTime, accent);
+        break;
+      case 'hihat':
+        this.playHiHat(audioTime, accent);
+        break;
+      case 'clave':
+        this.playClave(audioTime, accent);
+        break;
+    }
+  }
+
+  private playTone(
+    audioTime: number,
+    options: { freq: number; type?: OscillatorType; peak: number; duration: number; pitchDropTo?: number }
+  ): void {
     const ctx = this.audioContext;
     if (!ctx) return;
 
-    const accent = sound === 'accent';
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = accent ? 1500 : 1000;
+    oscillator.type = options.type ?? 'sine';
+    oscillator.frequency.setValueAtTime(options.freq, audioTime);
+    if (options.pitchDropTo !== undefined) {
+      oscillator.frequency.exponentialRampToValueAtTime(options.pitchDropTo, audioTime + options.duration);
+    }
 
-    const peak = accent ? 0.35 : 0.22;
-    const duration = 0.045;
     gain.gain.setValueAtTime(0, audioTime);
-    gain.gain.linearRampToValueAtTime(peak, audioTime + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + duration);
+    gain.gain.linearRampToValueAtTime(options.peak, audioTime + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + options.duration);
 
     oscillator.connect(gain);
     gain.connect(ctx.destination);
     oscillator.start(audioTime);
-    oscillator.stop(audioTime + duration + 0.01);
+    oscillator.stop(audioTime + options.duration + 0.01);
   }
 
-  /** A short filtered noise burst, for the backbeat "clap" sound. */
-  private playClap(audioTime: number): void {
+  private playNoiseBurst(
+    audioTime: number,
+    options: { freq: number; q: number; peak: number; duration: number; highpass?: boolean }
+  ): void {
     const ctx = this.audioContext;
     if (!ctx || !this.noiseBuffer) return;
 
@@ -180,21 +227,100 @@ export class MetronomeEngine {
     source.buffer = this.noiseBuffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 1800;
-    filter.Q.value = 0.9;
+    filter.type = options.highpass ? 'highpass' : 'bandpass';
+    filter.frequency.value = options.freq;
+    filter.Q.value = options.q;
 
     const gain = ctx.createGain();
-    const duration = 0.07;
     gain.gain.setValueAtTime(0, audioTime);
-    gain.gain.linearRampToValueAtTime(0.5, audioTime + 0.003);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + duration);
+    gain.gain.linearRampToValueAtTime(options.peak, audioTime + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + options.duration);
 
     source.connect(filter);
     filter.connect(gain);
     gain.connect(ctx.destination);
     source.start(audioTime);
-    source.stop(audioTime + duration + 0.01);
+    source.stop(audioTime + options.duration + 0.01);
+  }
+
+  private playDigital(audioTime: number, accent: boolean): void {
+    this.playTone(audioTime, {
+      freq: accent ? 1500 : 1000,
+      peak: accent ? 0.35 : 0.22,
+      duration: 0.045,
+    });
+  }
+
+  private playWoodblock(audioTime: number, accent: boolean): void {
+    this.playTone(audioTime, {
+      type: 'triangle',
+      freq: accent ? 1300 : 1000,
+      pitchDropTo: accent ? 700 : 550,
+      peak: accent ? 0.4 : 0.26,
+      duration: 0.05,
+    });
+  }
+
+  private playRimshot(audioTime: number, accent: boolean): void {
+    this.playNoiseBurst(audioTime, {
+      freq: 3200,
+      q: 1.1,
+      peak: accent ? 0.45 : 0.28,
+      duration: 0.03,
+    });
+    this.playTone(audioTime, {
+      type: 'triangle',
+      freq: accent ? 2200 : 1800,
+      peak: accent ? 0.2 : 0.12,
+      duration: 0.02,
+    });
+  }
+
+  private playCowbell(audioTime: number, accent: boolean): void {
+    const ctx = this.audioContext;
+    if (!ctx) return;
+
+    const duration = accent ? 0.09 : 0.06;
+    const peak = accent ? 0.32 : 0.2;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 2500;
+    filter.Q.value = 2.5;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, audioTime);
+    gain.gain.linearRampToValueAtTime(peak, audioTime + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + duration);
+
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    for (const freq of [587, 845]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      osc.connect(filter);
+      osc.start(audioTime);
+      osc.stop(audioTime + duration + 0.01);
+    }
+  }
+
+  private playHiHat(audioTime: number, accent: boolean): void {
+    this.playNoiseBurst(audioTime, {
+      freq: 7000,
+      q: 0.7,
+      peak: accent ? 0.3 : 0.18,
+      duration: accent ? 0.035 : 0.02,
+      highpass: true,
+    });
+  }
+
+  private playClave(audioTime: number, accent: boolean): void {
+    this.playTone(audioTime, {
+      freq: accent ? 2600 : 2200,
+      peak: accent ? 0.38 : 0.24,
+      duration: 0.02,
+    });
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {
