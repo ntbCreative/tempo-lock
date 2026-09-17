@@ -38,6 +38,7 @@ const SECTION_TITLES: Record<SettingsSectionId, string> = {
   detector: 'Detector',
   clickTrack: 'Click Track',
   sounds: 'Sounds',
+  practice: 'Practice',
   appearance: 'Appearance',
 };
 
@@ -194,6 +195,38 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
           onChange={(e) => updateSettings({ clickTrackLengthBars: Number(e.target.value) })}
         />
       </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="count-in">Audible count-in</label>
+          <input
+            id="count-in"
+            type="checkbox"
+            checked={settings.countInEnabled}
+            onChange={(e) => updateSettings({ countInEnabled: e.target.checked })}
+          />
+        </div>
+        <p className="settings-note">
+          Plays quiet clicks during the auto-start countdown bars, so the band hears it coming.
+        </p>
+        {settings.countInEnabled && (
+          <>
+            <div className="control__label-row" style={{ marginTop: 10 }}>
+              <label htmlFor="count-in-volume">Count-in volume</label>
+              <span>{Math.round(settings.countInVolume * 100)}%</span>
+            </div>
+            <input
+              id="count-in-volume"
+              type="range"
+              min={0.1}
+              max={0.8}
+              step={0.05}
+              value={settings.countInVolume}
+              onChange={(e) => updateSettings({ countInVolume: Number(e.target.value) })}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -222,6 +255,80 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
             : '2 & 4 clap mode plays this sound, accented, on beats 2 and 4.'}
         </p>
       </div>
+    </div>
+  );
+}
+
+function PracticeSection({ settings, updateSettings }: SettingsProps) {
+  return (
+    <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="ramp-enabled">Tempo ramp</label>
+          <input
+            id="ramp-enabled"
+            type="checkbox"
+            checked={settings.rampEnabled}
+            onChange={(e) => updateSettings({ rampEnabled: e.target.checked })}
+          />
+        </div>
+        <p className="settings-note">
+          When on, Play Click starts at the dialed-in BPM and steps up (or down) toward a target as you play,
+          instead of staying fixed. Classic speed-building practice.
+        </p>
+      </div>
+
+      {settings.rampEnabled && (
+        <>
+          <div className="control">
+            <div className="control__label-row">
+              <label htmlFor="ramp-target">Target BPM</label>
+              <span>{settings.rampTargetBpm}</span>
+            </div>
+            <input
+              id="ramp-target"
+              type="range"
+              min={settings.minBpm}
+              max={settings.maxBpm}
+              step={1}
+              value={settings.rampTargetBpm}
+              onChange={(e) => updateSettings({ rampTargetBpm: Number(e.target.value) })}
+            />
+          </div>
+
+          <div className="control">
+            <div className="control__label-row">
+              <label htmlFor="ramp-step">BPM step</label>
+              <span>+{settings.rampBpmStep}</span>
+            </div>
+            <input
+              id="ramp-step"
+              type="range"
+              min={1}
+              max={20}
+              step={1}
+              value={settings.rampBpmStep}
+              onChange={(e) => updateSettings({ rampBpmStep: Number(e.target.value) })}
+            />
+          </div>
+
+          <div className="control">
+            <div className="control__label-row">
+              <label htmlFor="ramp-bars">Bars per step</label>
+              <span>{settings.rampBarsPerStep}</span>
+            </div>
+            <input
+              id="ramp-bars"
+              type="range"
+              min={1}
+              max={16}
+              step={1}
+              value={settings.rampBarsPerStep}
+              onChange={(e) => updateSettings({ rampBarsPerStep: Number(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -289,6 +396,7 @@ const SECTION_RENDERERS: Record<SettingsSectionId, (props: SettingsProps) => Rea
   detector: DetectorSection,
   clickTrack: ClickTrackSection,
   sounds: SoundsSection,
+  practice: PracticeSection,
   appearance: AppearanceSection,
 };
 

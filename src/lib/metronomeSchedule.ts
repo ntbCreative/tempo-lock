@@ -1,17 +1,24 @@
-import type { DetectionStatus } from './continuity';
-
 /**
  * "Start a metronome after N bars" logic.
  *
- * The idea: the player plays steadily, the detector locks onto a tempo, and
- * once the lock has held for a chosen number of bars, a click track kicks in
- * at that exact tempo -- phase-aligned to the moment the lock began, not to
+ * The idea: the player plays steadily, the detector settles on a tempo, and
+ * once that tempo has held for a chosen number of bars, a click track kicks
+ * in at that exact tempo -- phase-aligned to the moment it settled, not to
  * whenever the trigger check happens to run.
  *
+ * Deliberately keys off the *displayed BPM value* rather than the
+ * detector's confidence label ('locked' vs 'low-confidence'). In a real
+ * band mix, confidence dips constantly -- other instruments, room noise,
+ * a cymbal decaying -- even while the actual tempo reading stays rock
+ * steady. Resetting the countdown on every confidence wobble would mean
+ * it almost never completes outside a silent room. Instead, progress only
+ * resets on a genuine change: the BPM reading drifting away from where the
+ * countdown started, or the detector losing the tempo entirely.
+ *
  * This module is pure (no audio, no timers): it just decides *when* the
- * metronome should start and at what BPM, given a stream of
- * (status, bpm, time) snapshots. `src/audio/metronomeEngine.ts` is the only
- * place that turns that decision into actual sound.
+ * metronome should start and at what BPM, given a stream of (bpm, time)
+ * snapshots. `src/audio/metronomeEngine.ts` is the only place that turns
+ * that decision into actual sound.
  */
 
 export type BarCount = 0 | 1 | 2 | 4; // 0 = feature off
@@ -19,19 +26,22 @@ export type BarCount = 0 | 1 | 2 | 4; // 0 = feature off
 export interface BarCountdownConfig {
   barsRequired: BarCount;
   beatsPerBar: number;
+  /** Relative BPM drift from the countdown's starting tempo treated as a genuine tempo change (resets and restarts the countdown) rather than noise. */
+  driftTolerance: number;
 }
 
 export const DEFAULT_BAR_COUNTDOWN_CONFIG: BarCountdownConfig = {
   barsRequired: 0,
   beatsPerBar: 4,
+  driftTolerance: 0.08,
 };
 
 export interface BarCountdownState {
-  /** Wall-clock time (seconds) the current unbroken lock began, or null if not currently locked. */
+  /** Wall-clock time (seconds) the current countdown began, or null if not currently counting. */
   lockStartTimeSec: number | null;
-  /** BPM at the moment the lock began; frozen for the duration of this lock so the countdown duration doesn't shift under drift. */
+  /** BPM at the moment the countdown began; frozen for its duration so the target duration doesn't shift under drift. */
   lockStartBpm: number | null;
-  /** Whether the metronome has already been triggered for this lock. */
+  /** Whether the metronome has already been triggered for this countdown. */
   triggered: boolean;
 }
 
@@ -49,47 +59,46 @@ export interface BarCountdownResult {
   metronomeBpm: number | null;
 }
 
+function noTrigger(state: BarCountdownState): BarCountdownResult {
+  return { state, shouldStartMetronome: false, metronomeStartTimeSec: null, metronomeBpm: null };
+}
+
 /**
- * Advance the countdown by one detector snapshot. Call this every time the
- * continuity tracker produces a new status/bpm, with the current wall-clock
- * time (seconds).
+ * Advance the countdown by one detector snapshot: the currently displayed
+ * BPM (null if the detector hasn't settled on a tempo at all yet) and the
+ * current wall-clock time (seconds).
  */
 export function updateBarCountdown(
   state: BarCountdownState,
-  status: DetectionStatus,
   displayedBpm: number | null,
   nowSec: number,
   configOverrides: Partial<BarCountdownConfig> = {}
 ): BarCountdownResult {
   const cfg = { ...DEFAULT_BAR_COUNTDOWN_CONFIG, ...configOverrides };
 
-  if (cfg.barsRequired === 0 || status !== 'locked' || displayedBpm === null) {
-    // Feature off, or lock broken/never established: reset the countdown.
-    return {
-      state: createBarCountdownState(),
-      shouldStartMetronome: false,
-      metronomeStartTimeSec: null,
-      metronomeBpm: null,
-    };
+  if (cfg.barsRequired === 0 || displayedBpm === null) {
+    // Feature off, or no tempo reading at all: reset the countdown.
+    return noTrigger(createBarCountdownState());
   }
 
   if (state.lockStartTimeSec === null) {
-    // Lock just began.
-    return {
-      state: { lockStartTimeSec: nowSec, lockStartBpm: displayedBpm, triggered: false },
-      shouldStartMetronome: false,
-      metronomeStartTimeSec: null,
-      metronomeBpm: null,
-    };
+    // A tempo reading just appeared: start the countdown.
+    return noTrigger({ lockStartTimeSec: nowSec, lockStartBpm: displayedBpm, triggered: false });
   }
 
   if (state.triggered) {
-    // Already fired for this lock; stay put until the lock breaks.
-    return { state, shouldStartMetronome: false, metronomeStartTimeSec: null, metronomeBpm: null };
+    // Already fired for this countdown; stay put until it's reset (start/stop).
+    return noTrigger(state);
   }
 
-  const bpm = state.lockStartBpm ?? displayedBpm;
-  const beatIntervalSec = 60 / bpm;
+  const startBpm = state.lockStartBpm ?? displayedBpm;
+  const drift = Math.abs(displayedBpm - startBpm) / startBpm;
+  if (drift > cfg.driftTolerance) {
+    // A genuine tempo change, not just noise: restart the countdown at the new tempo.
+    return noTrigger({ lockStartTimeSec: nowSec, lockStartBpm: displayedBpm, triggered: false });
+  }
+
+  const beatIntervalSec = 60 / startBpm;
   const requiredDurationSec = beatIntervalSec * cfg.beatsPerBar * cfg.barsRequired;
   const elapsed = nowSec - state.lockStartTimeSec;
 
@@ -99,11 +108,11 @@ export function updateBarCountdown(
       state: { ...state, triggered: true },
       shouldStartMetronome: true,
       metronomeStartTimeSec: startTimeSec,
-      metronomeBpm: bpm,
+      metronomeBpm: startBpm,
     };
   }
 
-  return { state, shouldStartMetronome: false, metronomeStartTimeSec: null, metronomeBpm: null };
+  return noTrigger(state);
 }
 
 /**

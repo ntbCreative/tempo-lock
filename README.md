@@ -89,13 +89,21 @@ Web-Audio wiring layer:
   beats, accent-the-downbeat, "2 & 4 clap" backbeat, or custom beats), and
   a choice of synthesized percussion sounds.
 - Two ways to start the click track: automatically after N bars of steady
-  playing (phase-aligned to when the lock began), or manually at any BPM
-  with half/double buttons and an optional fixed session length with a
-  live bar/beat/remaining readout.
+  playing (phase-aligned to when the countdown began, tolerant of
+  confidence noise), or manually at any BPM with half/double buttons and
+  an optional fixed session length with a live bar/beat/remaining readout.
+- Audible count-in: quiet clicks during the auto-start countdown bars, so
+  the band hears it coming instead of a silent wait then a surprise click.
+- Tempo ramp: a manually-started click track can step its BPM up (or
+  down) by a fixed amount every N bars toward a target, then hold —
+  classic speed-building practice.
+- Setlist presets: save the current BPM/signature/click-mode/sound setup
+  under a name, and tap it back in later instead of re-dialing every
+  control between songs.
 - Settings screen with drag-to-reorder sections, 5 color themes, and (on
   Safari/Apple devices) an in-app AirPlay device picker.
-- Settings, theme, and section order persist across reloads via
-  `localStorage`.
+- Settings, theme, section order, and presets all persist across reloads
+  via `localStorage`.
 - Installable as a PWA.
 
 ## Testing
@@ -109,7 +117,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (93 tests as of this build).
+Run `npm run test` for the full suite (130 tests as of this build).
 
 ## Known real-world limitations
 
@@ -134,13 +142,15 @@ real kit has not been measured. In particular:
   consensus window (roughly half a second, given the 150ms analysis
   interval) will lag behind by design — that lag is what prevents the
   display from flickering on noise.
-- **Click track**: the auto-start countdown restarts from zero if the lock
-  breaks before it finishes, so playing unsteadily during the count-in
-  bars will delay the click track rather than start it early or late. Once
-  it's playing, it keeps going at a fixed tempo until you stop it, stop
-  listening, or it reaches the end of a fixed-length session — it doesn't
-  continue tracking your tempo after it kicks in. "2 & 4 clap" mode is
-  tuned for 4/4 (even-numbered beats); in other signatures it's an
+- **Click track auto-start**: keys off the displayed BPM value only, not
+  the detector's confidence label — it deliberately keeps counting through
+  brief confidence dips (band mix, room noise) since those don't mean the
+  tempo reading itself is wrong. It only resets if the tempo reading is
+  lost entirely or drifts by more than ~8% (a genuine tempo change).
+  Once it's playing, it keeps going at a fixed tempo until you stop it,
+  stop listening, or it reaches the end of a fixed-length session — it
+  doesn't continue tracking your tempo after it kicks in. "2 & 4 clap"
+  mode is tuned for 4/4 (even-numbered beats); in other signatures it's an
   approximation rather than a real backbeat pattern.
 - **AirPlay**: the in-app device picker uses `webkitShowPlaybackTargetPicker`,
   a Safari/Apple-only browser API — it won't appear on Chrome, Firefox, or
@@ -153,6 +163,18 @@ real kit has not been measured. In particular:
   Clave) are synthesized from oscillators and filtered noise, not sampled
   recordings, so they're a reasonable approximation of the real instrument
   rather than a recording of one.
+- **Count-in**: covers exactly the auto-start countdown's bars and stops
+  itself right as the full-volume click track begins — both are computed
+  from the same numbers, so they should hand off cleanly, but this hasn't
+  been tested against a real, noisy room yet.
+- **Tempo ramp**: only available on the manually-started click track, not
+  the mic-triggered auto-start. The displayed BPM during a ramp comes from
+  polling the engine's position every 100ms, so it can lag the actual
+  audio by up to that long.
+- **Presets**: capture BPM, signature, click mode/custom beats, sound kit,
+  auto-start bars, and session length — not the detector settings
+  (smoothing/sensitivity/range) or theme, since those are more "how I like
+  the app to behave" than "how this song goes."
 - **Settings persistence**: stored in `localStorage`, so it's per-browser,
   per-device — it won't sync between your phone and a laptop, and clearing
   site data resets it to defaults.

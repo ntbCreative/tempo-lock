@@ -9,38 +9,41 @@ import {
   type BarCountdownState,
 } from '../lib/metronomeSchedule';
 import { parseCustomAccentBeats, type AccentMode, type SoundKit } from '../lib/clickPattern';
+import type { TempoRampConfig } from '../lib/tempoRamp';
 import { createTapTempoState, registerTap, type TapTempoState } from '../lib/tapTempo';
 import { parseStoredSettings, serializeSettings } from '../lib/settingsStorage';
 import { moveItem } from '../lib/layoutOrder';
 import { DEFAULT_THEME, type ThemeId } from '../lib/themes';
+import { addPreset, updatePreset, deletePreset, findPreset, type Preset } from '../lib/presets';
 
 const POSITION_POLL_MS = 100;
 
 const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
 const THEME_STORAGE_KEY = 'tempo-lock:theme';
 const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
+const PRESETS_STORAGE_KEY = 'tempo-lock:presets';
 
-export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'appearance';
+export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'practice' | 'appearance';
 
-export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'appearance'];
+export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'practice', 'appearance'];
 
 export interface DetectorSettings {
-  smoothing: number; // 0-1
-  sensitivity: number; // 0-1
+  smoothing: number;
+  sensitivity: number;
   minBpm: number;
   maxBpm: number;
-  /** Start a click track after this many steady bars of lock; 0 disables the feature. */
   metronomeBars: BarCount;
-  /** Time signature numerator: beats per bar. Applies to both the auto-start countdown and manual click track. */
   beatsPerBar: number;
-  /** Which beats within a bar get accented/clapped. */
   accentMode: AccentMode;
-  /** Raw text field for custom accent beats, e.g. "1,3" (1-indexed, comma-separated). */
   customAccentBeatsInput: string;
-  /** Bars a manually-started click track should run for; 0 means "until stopped". */
   clickTrackLengthBars: number;
-  /** Which synthesized percussion voice the click track uses. */
   soundKit: SoundKit;
+  countInEnabled: boolean;
+  countInVolume: number;
+  rampEnabled: boolean;
+  rampTargetBpm: number;
+  rampBpmStep: number;
+  rampBarsPerStep: number;
 }
 
 export const DEFAULT_SETTINGS: DetectorSettings = {
@@ -54,28 +57,47 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   customAccentBeatsInput: '1',
   clickTrackLengthBars: 0,
   soundKit: 'digital',
+  countInEnabled: true,
+  countInVolume: 0.35,
+  rampEnabled: false,
+  rampTargetBpm: 140,
+  rampBpmStep: 5,
+  rampBarsPerStep: 4,
 };
 
-function loadInitialSettings(): DetectorSettings {
-  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-  return parseStoredSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY), DEFAULT_SETTINGS);
+export interface SongPresetData {
+  manualBpm: number;
+  beatsPerBar: number;
+  accentMode: AccentMode;
+  customAccentBeatsInput: string;
+  soundKit: SoundKit;
+  clickTrackLengthBars: number;
+  metronomeBars: BarCount;
 }
 
-function loadInitialTheme(): ThemeId {
-  if (typeof window === 'undefined') return DEFAULT_THEME;
-  return parseStoredSettings(window.localStorage.getItem(THEME_STORAGE_KEY), { theme: DEFAULT_THEME }).theme;
+function loadInitial<T extends object>(key: string, defaults: T): T {
+  if (typeof window === 'undefined') return defaults;
+  return parseStoredSettings(window.localStorage.getItem(key), defaults);
 }
 
+/** Reconciles a persisted section order against the current known sections: keeps the user's ordering, drops any stale/unknown ids, and appends any new sections (e.g. added in an update) at the end rather than dropping them silently. */
 function loadInitialSectionOrder(): SettingsSectionId[] {
-  if (typeof window === 'undefined') return DEFAULT_SECTION_ORDER;
-  return parseStoredSettings(window.localStorage.getItem(SECTION_ORDER_STORAGE_KEY), { order: DEFAULT_SECTION_ORDER })
-    .order;
+  const stored = loadInitial(SECTION_ORDER_STORAGE_KEY, { order: DEFAULT_SECTION_ORDER }).order;
+  const known = new Set<SettingsSectionId>(DEFAULT_SECTION_ORDER);
+  const kept = stored.filter((id): id is SettingsSectionId => known.has(id as SettingsSectionId));
+  const missing = DEFAULT_SECTION_ORDER.filter((id) => !kept.includes(id));
+  return [...kept, ...missing];
 }
 
 export function useTempoDetector() {
-  const [settings, setSettings] = useState<DetectorSettings>(loadInitialSettings);
-  const [theme, setThemeState] = useState<ThemeId>(loadInitialTheme);
+  const [settings, setSettings] = useState<DetectorSettings>(() => loadInitial(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS));
+  const [theme, setThemeState] = useState<ThemeId>(
+    () => loadInitial(THEME_STORAGE_KEY, { theme: DEFAULT_THEME }).theme
+  );
   const [sectionOrder, setSectionOrder] = useState<SettingsSectionId[]>(loadInitialSectionOrder);
+  const [presets, setPresets] = useState<Preset<SongPresetData>[]>(
+    () => loadInitial(PRESETS_STORAGE_KEY, { list: [] as Preset<SongPresetData>[] }).list
+  );
   const [engineState, setEngineState] = useState<EngineState>({
     status: 'idle',
     continuity: createContinuityState(),
@@ -90,6 +112,7 @@ export function useTempoDetector() {
 
   const engineRef = useRef<LiveTempoEngine | null>(null);
   const metronomeEngineRef = useRef<MetronomeEngine | null>(null);
+  const countInEngineRef = useRef<MetronomeEngine | null>(null);
   const barCountdownRef = useRef<BarCountdownState>(createBarCountdownState());
   const settingsRef = useRef(settings);
   const positionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -116,6 +139,7 @@ export function useTempoDetector() {
 
   const stopMetronome = useCallback(() => {
     metronomeEngineRef.current?.stop();
+    countInEngineRef.current?.stop();
     barCountdownRef.current = createBarCountdownState();
     setMetronomeActive(false);
     setMetronomeBpm(null);
@@ -126,7 +150,6 @@ export function useTempoDetector() {
     settingsRef.current = settings;
   }, [settings]);
 
-  // Persist settings/theme/section order across reloads.
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, serializeSettings(settings));
   }, [settings]);
@@ -140,16 +163,19 @@ export function useTempoDetector() {
   }, [sectionOrder]);
 
   useEffect(() => {
+    window.localStorage.setItem(PRESETS_STORAGE_KEY, serializeSettings({ list: presets }));
+  }, [presets]);
+
+  useEffect(() => {
     engineRef.current = new LiveTempoEngine({
       ...settings,
       onUpdate: (state) => {
         setEngineState(state);
 
         if (state.status !== 'listening') {
-          // Session isn't actively running: keep any click track and
-          // countdown from a previous session from bleeding into the next.
-          if (metronomeEngineRef.current?.isRunning()) {
-            metronomeEngineRef.current.stop();
+          if (metronomeEngineRef.current?.isRunning() || countInEngineRef.current?.isRunning()) {
+            metronomeEngineRef.current?.stop();
+            countInEngineRef.current?.stop();
             setMetronomeActive(false);
             setMetronomeBpm(null);
             stopPositionPoll();
@@ -159,16 +185,36 @@ export function useTempoDetector() {
         }
 
         const cfg = settingsRef.current;
+        const previousState = barCountdownRef.current;
         const result = updateBarCountdown(
-          barCountdownRef.current,
-          state.continuity.status,
+          previousState,
           state.continuity.displayedBpm,
           performance.now() / 1000,
           { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar }
         );
         barCountdownRef.current = result.state;
 
+        if (result.state.lockStartTimeSec === null) {
+          countInEngineRef.current?.stop();
+        } else if (result.state.lockStartTimeSec !== previousState.lockStartTimeSec && !result.state.triggered) {
+          countInEngineRef.current?.stop();
+          if (cfg.countInEnabled && cfg.metronomeBars > 0 && result.state.lockStartBpm !== null) {
+            if (!countInEngineRef.current) {
+              countInEngineRef.current = new MetronomeEngine();
+            }
+            countInEngineRef.current.start(result.state.lockStartBpm, result.state.lockStartTimeSec, {
+              beatsPerBar: cfg.beatsPerBar,
+              accentMode: cfg.accentMode,
+              customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
+              soundKit: cfg.soundKit,
+              totalBars: cfg.metronomeBars,
+              volumeScale: cfg.countInVolume,
+            });
+          }
+        }
+
         if (result.shouldStartMetronome && result.metronomeBpm !== null && result.metronomeStartTimeSec !== null) {
+          countInEngineRef.current?.stop();
           if (!metronomeEngineRef.current) {
             metronomeEngineRef.current = new MetronomeEngine();
           }
@@ -177,7 +223,7 @@ export function useTempoDetector() {
             accentMode: cfg.accentMode,
             customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
             soundKit: cfg.soundKit,
-            totalBars: 0, // an auto-triggered click track runs until stopped, not a fixed length
+            totalBars: 0,
           });
           setMetronomeActive(true);
           setMetronomeBpm(result.metronomeBpm);
@@ -188,9 +234,9 @@ export function useTempoDetector() {
     return () => {
       engineRef.current?.stop();
       metronomeEngineRef.current?.stop();
+      countInEngineRef.current?.stop();
       stopPositionPoll();
     };
-    // Intentionally only constructed once; live setting changes go through updateOptions/refs below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -198,8 +244,6 @@ export function useTempoDetector() {
     engineRef.current?.updateOptions(settings);
   }, [settings]);
 
-  // Any change to the metronome-bars setting starts a clean countdown rather
-  // than continuing to count toward a stale target.
   const prevMetronomeBarsRef = useRef(settings.metronomeBars);
   useEffect(() => {
     if (prevMetronomeBarsRef.current !== settings.metronomeBars) {
@@ -251,19 +295,31 @@ export function useTempoDetector() {
     setManualBpmState((prev) => Math.round(clampBpm(prev * 2)));
   }, [clampBpm]);
 
-  /** Manually start (or restart) a click track at `manualBpm`, independent of mic detection. */
   const playManualClick = useCallback(() => {
     const cfg = settingsRef.current;
     if (!metronomeEngineRef.current) {
       metronomeEngineRef.current = new MetronomeEngine();
     }
     barCountdownRef.current = createBarCountdownState();
+    countInEngineRef.current?.stop();
+
+    const ramp: TempoRampConfig | undefined = cfg.rampEnabled
+      ? {
+          startBpm: manualBpm,
+          targetBpm: cfg.rampTargetBpm,
+          bpmStep: cfg.rampBpmStep,
+          barsPerStep: cfg.rampBarsPerStep,
+          beatsPerBar: cfg.beatsPerBar,
+        }
+      : undefined;
+
     metronomeEngineRef.current.start(manualBpm, performance.now() / 1000, {
       beatsPerBar: cfg.beatsPerBar,
       accentMode: cfg.accentMode,
       customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
       soundKit: cfg.soundKit,
       totalBars: cfg.clickTrackLengthBars,
+      ramp,
       onFinished: () => {
         setMetronomeActive(false);
         setMetronomeBpm(null);
@@ -274,6 +330,54 @@ export function useTempoDetector() {
     setMetronomeBpm(manualBpm);
     startPositionPoll();
   }, [manualBpm, startPositionPoll, stopPositionPoll]);
+
+  const currentPresetData = useCallback(
+    (): SongPresetData => ({
+      manualBpm,
+      beatsPerBar: settingsRef.current.beatsPerBar,
+      accentMode: settingsRef.current.accentMode,
+      customAccentBeatsInput: settingsRef.current.customAccentBeatsInput,
+      soundKit: settingsRef.current.soundKit,
+      clickTrackLengthBars: settingsRef.current.clickTrackLengthBars,
+      metronomeBars: settingsRef.current.metronomeBars,
+    }),
+    [manualBpm]
+  );
+
+  const savePresetAsNew = useCallback(
+    (name: string) => {
+      setPresets((prev) => addPreset(prev, name, currentPresetData(), Date.now()));
+    },
+    [currentPresetData]
+  );
+
+  const overwritePreset = useCallback(
+    (id: string, name: string) => {
+      setPresets((prev) => updatePreset(prev, id, name, currentPresetData(), Date.now()));
+    },
+    [currentPresetData]
+  );
+
+  const removePreset = useCallback((id: string) => {
+    setPresets((prev) => deletePreset(prev, id));
+  }, []);
+
+  const loadPreset = useCallback(
+    (id: string) => {
+      const preset = findPreset(presets, id);
+      if (!preset) return;
+      setManualBpmState(preset.data.manualBpm);
+      updateSettings({
+        beatsPerBar: preset.data.beatsPerBar,
+        accentMode: preset.data.accentMode,
+        customAccentBeatsInput: preset.data.customAccentBeatsInput,
+        soundKit: preset.data.soundKit,
+        clickTrackLengthBars: preset.data.clickTrackLengthBars,
+        metronomeBars: preset.data.metronomeBars,
+      });
+    },
+    [presets, updateSettings]
+  );
 
   return {
     settings,
@@ -297,6 +401,11 @@ export function useTempoDetector() {
     halveManualBpm,
     doubleManualBpm,
     playManualClick,
+    presets,
+    savePresetAsNew,
+    overwritePreset,
+    removePreset,
+    loadPreset,
     isMicrophoneSupported: isMicrophoneSupported(),
   };
 }

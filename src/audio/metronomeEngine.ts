@@ -1,4 +1,4 @@
-import { computeClickTimes, computeSessionPosition } from '../lib/metronomeSchedule';
+import { computeSessionPosition } from '../lib/metronomeSchedule';
 import {
   resolveClickSound,
   beatIndexInBar as computeBeatIndexInBar,
@@ -7,26 +7,10 @@ import {
   type ClickSound,
   type SoundKit,
 } from '../lib/clickPattern';
+import { bpmForBar, clickIndexAtElapsedTime, type TempoRampConfig } from '../lib/tempoRamp';
 
-/**
- * Plays an audible metronome click track at a fixed BPM, starting at a given
- * wall-clock (performance.now()-based) time for phase alignment with the
- * detector. Runs its own AudioContext, separate from the mic-analysis
- * context in liveTempoEngine.ts, since it needs to be audible (the mic
- * pipeline is deliberately silent).
- *
- * Uses the standard "lookahead scheduler" pattern: a cheap setInterval
- * repeatedly tops up a short window of precisely-timed clicks scheduled via
- * the AudioContext clock, which is far more accurate than timing audio
- * playback directly off setInterval/setTimeout.
- *
- * All percussion voices are synthesized (oscillators + filtered noise) --
- * no sample playback, so no asset loading and no licensing concerns.
- */
-
-const LOOKAHEAD_SEC = 0.1; // how far ahead we schedule
-const SCHEDULER_INTERVAL_MS = 25; // how often we top up the schedule
-const CLICK_BATCH = 8; // how many upcoming clicks we compute at a time
+const LOOKAHEAD_SEC = 0.1;
+const SCHEDULER_INTERVAL_MS = 25;
 
 function nowSeconds(): number {
   return performance.now() / 1000;
@@ -37,9 +21,9 @@ export interface MetronomeStartOptions {
   accentMode?: AccentMode;
   customAccentBeats?: number[];
   soundKit?: SoundKit;
-  /** Bars the session should run for; 0 (default) means "until stopped". */
   totalBars?: number;
-  /** Called once, when a fixed-length session reaches its end and stops itself. */
+  volumeScale?: number;
+  ramp?: TempoRampConfig;
   onFinished?: () => void;
 }
 
@@ -47,6 +31,7 @@ export interface MetronomePosition {
   barIndex: number;
   beatInBar: number;
   remainingBars: number | null;
+  currentBpm: number;
 }
 
 export class MetronomeEngine {
@@ -54,12 +39,15 @@ export class MetronomeEngine {
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private perfToAudioOffset = 0;
   private nextClickIndex = 0;
+  private nextClickTimePerfSec = 0;
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
   private customAccentBeats: number[] = [];
   private soundKit: SoundKit = 'digital';
   private totalBars = 0;
+  private volumeScale = 1;
+  private ramp: TempoRampConfig | null = null;
   private onFinished: (() => void) | undefined;
   private startPerfSec = 0;
   private running = false;
@@ -88,9 +76,12 @@ export class MetronomeEngine {
     this.customAccentBeats = options.customAccentBeats ?? [];
     this.soundKit = options.soundKit ?? 'digital';
     this.totalBars = options.totalBars ?? 0;
+    this.volumeScale = options.volumeScale ?? 1;
+    this.ramp = options.ramp ?? null;
     this.onFinished = options.onFinished;
     this.startPerfSec = startAtPerfSec;
     this.nextClickIndex = 0;
+    this.nextClickTimePerfSec = startAtPerfSec;
     this.running = true;
 
     this.schedulerTimer = setInterval(() => this.scheduleUpcomingClicks(), SCHEDULER_INTERVAL_MS);
@@ -112,25 +103,27 @@ export class MetronomeEngine {
   getPosition(): MetronomePosition | null {
     if (!this.running) return null;
     const elapsedSec = Math.max(0, nowSeconds() - this.startPerfSec);
-    const clickIndex = Math.floor(elapsedSec / (60 / this.bpm));
+    const clickIndex = this.ramp
+      ? clickIndexAtElapsedTime(elapsedSec, this.ramp)
+      : Math.floor(elapsedSec / (60 / this.bpm));
     const pos = computeSessionPosition(clickIndex, this.beatsPerBar, this.totalBars);
-    return { barIndex: pos.barIndex, beatInBar: pos.beatInBar, remainingBars: pos.remainingBars };
+    const currentBpm = this.bpmForClickIndex(clickIndex);
+    return { barIndex: pos.barIndex, beatInBar: pos.beatInBar, remainingBars: pos.remainingBars, currentBpm };
+  }
+
+  private bpmForClickIndex(clickIndex: number): number {
+    if (!this.ramp) return this.bpm;
+    const safeBeatsPerBar = this.beatsPerBar > 0 ? this.beatsPerBar : 1;
+    const barIndex = Math.floor(clickIndex / safeBeatsPerBar);
+    return bpmForBar(barIndex, this.ramp);
   }
 
   private scheduleUpcomingClicks(): void {
     if (!this.audioContext || !this.running) return;
 
-    const perfNow = nowSeconds();
-    const horizonPerfSec = perfNow + LOOKAHEAD_SEC;
+    const horizonPerfSec = nowSeconds() + LOOKAHEAD_SEC;
 
-    const batchStartTime = this.startPerfSec + this.nextClickIndex * (60 / this.bpm);
-    if (batchStartTime > horizonPerfSec) return;
-
-    const candidateTimes = computeClickTimes(batchStartTime, this.bpm, CLICK_BATCH);
-    for (let i = 0; i < candidateTimes.length; i++) {
-      const clickPerfTime = candidateTimes[i];
-      if (clickPerfTime > horizonPerfSec) break;
-
+    while (this.nextClickTimePerfSec <= horizonPerfSec) {
       const sessionPos = computeSessionPosition(this.nextClickIndex, this.beatsPerBar, this.totalBars);
       if (sessionPos.finished) {
         const onFinished = this.onFinished;
@@ -139,7 +132,8 @@ export class MetronomeEngine {
         return;
       }
 
-      const audioTime = clickPerfTime + this.perfToAudioOffset;
+      const bpmForThisClick = this.bpmForClickIndex(this.nextClickIndex);
+      const audioTime = this.nextClickTimePerfSec + this.perfToAudioOffset;
       if (audioTime >= this.audioContext.currentTime) {
         const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
         const sound = resolveClickSound(beatInBar, {
@@ -149,7 +143,9 @@ export class MetronomeEngine {
         });
         this.playClick(audioTime, sound);
       }
+
       this.nextClickIndex += 1;
+      this.nextClickTimePerfSec += 60 / bpmForThisClick;
     }
   }
 
@@ -207,7 +203,7 @@ export class MetronomeEngine {
     }
 
     gain.gain.setValueAtTime(0, audioTime);
-    gain.gain.linearRampToValueAtTime(options.peak, audioTime + 0.002);
+    gain.gain.linearRampToValueAtTime(options.peak * this.volumeScale, audioTime + 0.002);
     gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + options.duration);
 
     oscillator.connect(gain);
@@ -233,7 +229,7 @@ export class MetronomeEngine {
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, audioTime);
-    gain.gain.linearRampToValueAtTime(options.peak, audioTime + 0.003);
+    gain.gain.linearRampToValueAtTime(options.peak * this.volumeScale, audioTime + 0.003);
     gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + options.duration);
 
     source.connect(filter);
@@ -244,11 +240,7 @@ export class MetronomeEngine {
   }
 
   private playDigital(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, {
-      freq: accent ? 1500 : 1000,
-      peak: accent ? 0.35 : 0.22,
-      duration: 0.045,
-    });
+    this.playTone(audioTime, { freq: accent ? 1500 : 1000, peak: accent ? 0.35 : 0.22, duration: 0.045 });
   }
 
   private playWoodblock(audioTime: number, accent: boolean): void {
@@ -262,18 +254,8 @@ export class MetronomeEngine {
   }
 
   private playRimshot(audioTime: number, accent: boolean): void {
-    this.playNoiseBurst(audioTime, {
-      freq: 3200,
-      q: 1.1,
-      peak: accent ? 0.45 : 0.28,
-      duration: 0.03,
-    });
-    this.playTone(audioTime, {
-      type: 'triangle',
-      freq: accent ? 2200 : 1800,
-      peak: accent ? 0.2 : 0.12,
-      duration: 0.02,
-    });
+    this.playNoiseBurst(audioTime, { freq: 3200, q: 1.1, peak: accent ? 0.45 : 0.28, duration: 0.03 });
+    this.playTone(audioTime, { type: 'triangle', freq: accent ? 2200 : 1800, peak: accent ? 0.2 : 0.12, duration: 0.02 });
   }
 
   private playCowbell(audioTime: number, accent: boolean): void {
@@ -281,7 +263,7 @@ export class MetronomeEngine {
     if (!ctx) return;
 
     const duration = accent ? 0.09 : 0.06;
-    const peak = accent ? 0.32 : 0.2;
+    const peak = (accent ? 0.32 : 0.2) * this.volumeScale;
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = 2500;
@@ -316,11 +298,7 @@ export class MetronomeEngine {
   }
 
   private playClave(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, {
-      freq: accent ? 2600 : 2200,
-      peak: accent ? 0.38 : 0.24,
-      duration: 0.02,
-    });
+    this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.38 : 0.24, duration: 0.02 });
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {

@@ -47,10 +47,15 @@ function App() {
     halveManualBpm,
     doubleManualBpm,
     playManualClick,
+    presets,
+    savePresetAsNew,
+    removePreset,
+    loadPreset,
     isMicrophoneSupported,
   } = useTempoDetector();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -78,6 +83,15 @@ function App() {
 
   const confidencePercent = Math.round(Math.min(1, Math.max(0, continuity.confidence)) * 100);
   const signalPercent = Math.round(Math.min(1, Math.max(0, engineState.signalLevel)) * 100);
+
+  const clickTrackBpm = metronomePosition?.currentBpm ?? metronomeBpm;
+
+  const handleSavePreset = () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    savePresetAsNew(name);
+    setNewPresetName('');
+  };
 
   return (
     <div className="stage">
@@ -122,7 +136,7 @@ function App() {
 
         {isListening && settings.metronomeBars > 0 && !metronomeActive && (
           <p className="notice notice--metronome">
-            {continuity.status === 'locked'
+            {continuity.status === 'locked' || continuity.status === 'low-confidence'
               ? `Counting in… click track starts after ${settings.metronomeBars} bar${settings.metronomeBars > 1 ? 's' : ''}`
               : 'Play steadily to start the count-in'}
           </p>
@@ -130,7 +144,7 @@ function App() {
 
         {metronomeActive && (
           <p className="notice notice--metronome">
-            Click track at {metronomeBpm} BPM
+            Click track at {clickTrackBpm} BPM
             {metronomePosition && (
               <>
                 {' · Bar '}
@@ -203,6 +217,44 @@ function App() {
           <button type="button" className="big-button big-button--manual-click" onClick={playManualClick}>
             Play Click
           </button>
+        </div>
+
+        <div className="setlist">
+          <div className="setlist__save-row">
+            <input
+              type="text"
+              className="setlist__name-input"
+              placeholder="Save current setup as…"
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSavePreset();
+              }}
+            />
+            <button type="button" className="pill-button" onClick={handleSavePreset} disabled={!newPresetName.trim()}>
+              Save
+            </button>
+          </div>
+
+          {presets.length > 0 && (
+            <div className="setlist__chips">
+              {presets.map((preset) => (
+                <div key={preset.id} className="setlist__chip">
+                  <button type="button" className="setlist__chip-name" onClick={() => loadPreset(preset.id)}>
+                    {preset.name} · {preset.data.manualBpm} BPM
+                  </button>
+                  <button
+                    type="button"
+                    className="setlist__chip-remove"
+                    onClick={() => removePreset(preset.id)}
+                    aria-label={`Delete ${preset.name}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 

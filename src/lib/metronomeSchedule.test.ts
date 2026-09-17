@@ -12,7 +12,7 @@ describe('metronomeSchedule: bar countdown feature-off', () => {
   it('never triggers when barsRequired is 0', () => {
     let state = createBarCountdownState();
     for (let t = 0; t <= 10; t++) {
-      const result = updateBarCountdown(state, 'locked', 120, t, { barsRequired: 0 });
+      const result = updateBarCountdown(state, 120, t, { barsRequired: 0 });
       state = result.state;
       expect(result.shouldStartMetronome).toBe(false);
     }
@@ -20,18 +20,14 @@ describe('metronomeSchedule: bar countdown feature-off', () => {
 });
 
 describe('metronomeSchedule: countdown lifecycle', () => {
-  it('does not trigger while not yet locked', () => {
-    const result = updateBarCountdown(createBarCountdownState(), 'finding', null, 0, {
-      barsRequired: 1,
-    });
+  it('does not trigger before any tempo reading exists', () => {
+    const result = updateBarCountdown(createBarCountdownState(), null, 0, { barsRequired: 1 });
     expect(result.shouldStartMetronome).toBe(false);
     expect(result.state.lockStartTimeSec).toBeNull();
   });
 
-  it('starts the countdown the moment lock begins', () => {
-    const result = updateBarCountdown(createBarCountdownState(), 'locked', 120, 5, {
-      barsRequired: 1,
-    });
+  it('starts the countdown the moment a tempo reading appears', () => {
+    const result = updateBarCountdown(createBarCountdownState(), 120, 5, { barsRequired: 1 });
     expect(result.shouldStartMetronome).toBe(false);
     expect(result.state.lockStartTimeSec).toBe(5);
     expect(result.state.lockStartBpm).toBe(120);
@@ -39,87 +35,136 @@ describe('metronomeSchedule: countdown lifecycle', () => {
 
   it('triggers after exactly one bar (4 beats) at 120 BPM = 2 seconds', () => {
     let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 120, 0, { barsRequired: 1 });
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 1 });
     state = result.state;
 
-    // Not yet at 2s.
-    result = updateBarCountdown(state, 'locked', 120, 1.9, { barsRequired: 1 });
+    result = updateBarCountdown(state, 120, 1.9, { barsRequired: 1 });
     state = result.state;
     expect(result.shouldStartMetronome).toBe(false);
 
-    // At/after 2s: triggers.
-    result = updateBarCountdown(state, 'locked', 120, 2.0, { barsRequired: 1 });
+    result = updateBarCountdown(state, 120, 2.0, { barsRequired: 1 });
     expect(result.shouldStartMetronome).toBe(true);
     expect(result.metronomeBpm).toBe(120);
     expect(result.metronomeStartTimeSec).toBeCloseTo(2.0, 5);
   });
 
-  it('phase-aligns the start time to lock-start + exact bar duration, not to the check time', () => {
+  it('phase-aligns the start time to countdown-start + exact bar duration, not to the check time', () => {
     let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 100, 10, { barsRequired: 2 });
+    let result = updateBarCountdown(state, 100, 10, { barsRequired: 2 });
     state = result.state;
     // 2 bars at 100 BPM, 4 beats/bar: 2 * 4 * 0.6s = 4.8s -> triggers at t=14.8
-    result = updateBarCountdown(state, 'locked', 100, 15.3, { barsRequired: 2 }); // checked a bit late
+    result = updateBarCountdown(state, 100, 15.3, { barsRequired: 2 }); // checked a bit late
     expect(result.shouldStartMetronome).toBe(true);
     expect(result.metronomeStartTimeSec).toBeCloseTo(14.8, 5);
   });
 
-  it('only fires once per lock, even if updates continue after triggering', () => {
+  it('only fires once, even if updates continue after triggering', () => {
     let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 120, 0, { barsRequired: 1 });
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 1 });
     state = result.state;
-    result = updateBarCountdown(state, 'locked', 120, 2.0, { barsRequired: 1 });
+    result = updateBarCountdown(state, 120, 2.0, { barsRequired: 1 });
     state = result.state;
     expect(result.shouldStartMetronome).toBe(true);
 
-    result = updateBarCountdown(state, 'locked', 120, 2.5, { barsRequired: 1 });
+    result = updateBarCountdown(state, 120, 2.5, { barsRequired: 1 });
     expect(result.shouldStartMetronome).toBe(false);
-    result = updateBarCountdown(result.state, 'locked', 120, 3.0, { barsRequired: 1 });
+    result = updateBarCountdown(result.state, 120, 3.0, { barsRequired: 1 });
     expect(result.shouldStartMetronome).toBe(false);
   });
 
-  it('resets the countdown if the lock breaks before completing', () => {
+  it('resets the countdown if the tempo reading is lost entirely', () => {
     let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 120, 0, { barsRequired: 4 });
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 4 });
     state = result.state;
-    result = updateBarCountdown(state, 'low-confidence', 120, 1, { barsRequired: 4 });
-    state = result.state;
-    expect(state.lockStartTimeSec).toBeNull();
-    expect(result.shouldStartMetronome).toBe(false);
-
-    // Re-locking starts a fresh countdown from the new time.
-    result = updateBarCountdown(state, 'locked', 120, 5, { barsRequired: 4 });
-    expect(result.state.lockStartTimeSec).toBe(5);
-  });
-
-  it('resets the countdown if displayed BPM becomes null', () => {
-    let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 120, 0, { barsRequired: 1 });
-    state = result.state;
-    result = updateBarCountdown(state, 'locked', null, 1, { barsRequired: 1 });
+    result = updateBarCountdown(state, null, 1, { barsRequired: 4 });
     expect(result.state.lockStartTimeSec).toBeNull();
+    expect(result.shouldStartMetronome).toBe(false);
+
+    // Re-acquiring starts a fresh countdown from the new time.
+    result = updateBarCountdown(result.state, 120, 5, { barsRequired: 4 });
+    expect(result.state.lockStartTimeSec).toBe(5);
   });
 
   it('scales required duration with barsRequired and tempo', () => {
     // 4 bars at 80 BPM, 4 beats/bar: 4*4*(60/80) = 12s
     let state = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 80, 0, { barsRequired: 4 });
+    let result = updateBarCountdown(state, 80, 0, { barsRequired: 4 });
     state = result.state;
-    result = updateBarCountdown(state, 'locked', 80, 11.9, { barsRequired: 4 });
+    result = updateBarCountdown(state, 80, 11.9, { barsRequired: 4 });
     expect(result.shouldStartMetronome).toBe(false);
-    result = updateBarCountdown(result.state, 'locked', 80, 12.0, { barsRequired: 4 });
+    result = updateBarCountdown(result.state, 80, 12.0, { barsRequired: 4 });
     expect(result.shouldStartMetronome).toBe(true);
   });
 
-  it('freezes the metronome bpm at lock-start even if displayed bpm drifts during the countdown', () => {
+  it('freezes the metronome bpm at countdown-start even if the displayed bpm drifts slightly during the countdown', () => {
     let state: BarCountdownState = createBarCountdownState();
-    let result = updateBarCountdown(state, 'locked', 120, 0, { barsRequired: 1 });
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 1 });
     state = result.state;
-    // Small drift while counting down shouldn't change the eventual metronome tempo.
-    result = updateBarCountdown(state, 'locked', 121.5, 1.0, { barsRequired: 1 });
+    result = updateBarCountdown(state, 121.5, 1.0, { barsRequired: 1 });
     state = result.state;
-    result = updateBarCountdown(state, 'locked', 122, 2.0, { barsRequired: 1 });
+    result = updateBarCountdown(state, 122, 2.0, { barsRequired: 1 });
     expect(result.metronomeBpm).toBe(120);
+  });
+});
+
+describe('metronomeSchedule: tolerating real-world confidence noise', () => {
+  // The countdown intentionally does NOT take detector confidence/status as
+  // input at all -- only the displayed BPM. A noisy room (band mix, other
+  // instruments) makes the detector's confidence wobble constantly even
+  // while the tempo reading itself stays put; the countdown must keep
+  // counting through that, or it would never complete outside a silent room.
+
+  it('keeps counting through small bpm jitter without ever resetting', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 2 });
+    state = result.state;
+    const jitteredReadings: [number, number][] = [
+      [118, 0.5],
+      [122, 1.0],
+      [119, 1.5],
+      [121, 2.5],
+      [120, 3.5],
+    ];
+    for (const [bpm, t] of jitteredReadings) {
+      result = updateBarCountdown(state, bpm, t, { barsRequired: 2 });
+      state = result.state;
+      expect(state.lockStartTimeSec).toBe(0);
+    }
+    // 2 bars at 120 BPM = 4s: by t=4.0 it should have fired.
+    result = updateBarCountdown(state, 120, 4.0, { barsRequired: 2 });
+    expect(result.shouldStartMetronome).toBe(true);
+  });
+
+  it('does not reset on a long run of identical readings', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 1 });
+    state = result.state;
+    for (let t = 0.2; t < 2.0; t += 0.2) {
+      result = updateBarCountdown(state, 120, t, { barsRequired: 1 });
+      state = result.state;
+      expect(state.lockStartTimeSec).toBe(0);
+    }
+  });
+});
+
+describe('metronomeSchedule: genuine tempo change resets the countdown', () => {
+  it('restarts the countdown when the bpm drifts beyond tolerance', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 4 });
+    state = result.state;
+    // A real tempo change: 120 -> 160 is way outside the default 8% tolerance.
+    result = updateBarCountdown(state, 160, 1, { barsRequired: 4 });
+    expect(result.state.lockStartTimeSec).toBe(1);
+    expect(result.state.lockStartBpm).toBe(160);
+  });
+
+  it('uses a configurable drift tolerance', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 0, { barsRequired: 4, driftTolerance: 0.2 });
+    state = result.state;
+    // 130 is ~8.3% off 120, within a widened 20% tolerance: should NOT reset.
+    result = updateBarCountdown(state, 130, 1, { barsRequired: 4, driftTolerance: 0.2 });
+    expect(result.state.lockStartTimeSec).toBe(0);
   });
 });
 
@@ -149,19 +194,19 @@ describe('metronomeSchedule: session position', () => {
   });
 
   it('reports remaining bars for a fixed-length session', () => {
-    const pos = computeSessionPosition(9, 4, 8); // click 9 -> bar 2 (0-indexed), 8-bar session
+    const pos = computeSessionPosition(9, 4, 8);
     expect(pos.remainingBars).toBe(6);
     expect(pos.finished).toBe(false);
   });
 
   it('flags finished once the click reaches the end of the session', () => {
-    const pos = computeSessionPosition(32, 4, 8); // bar 8 (0-indexed) of an 8-bar session
+    const pos = computeSessionPosition(32, 4, 8);
     expect(pos.finished).toBe(true);
     expect(pos.remainingBars).toBe(0);
   });
 
   it('handles a 3/4 signature correctly', () => {
-    const pos = computeSessionPosition(7, 3, 0); // 7 = bar 2, beat 1 (0-indexed) in 3/4
+    const pos = computeSessionPosition(7, 3, 0);
     expect(pos.barIndex).toBe(2);
     expect(pos.beatInBar).toBe(1);
   });

@@ -533,3 +533,63 @@ body {
   color: var(--text-dim);
   margin: 0;
 }
+
+.setlist {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.setlist__save-row {
+  display: flex;
+  gap: 10px;
+}
+
+.setlist__name-input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.setlist__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setlist__chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 4px 4px 14px;
+}
+
+.setlist__chip-name {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 15px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.setlist__chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 10px;
+  cursor: pointer;
+}
