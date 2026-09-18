@@ -117,7 +117,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (145 tests as of this build).
+Run `npm run test` for the full suite (153 tests as of this build).
 
 ## Known real-world limitations
 
@@ -213,6 +213,45 @@ real kit has not been measured. In particular:
   wrong initial lock. The debounce fix has direct test coverage in the new
   `onsetDetection.test.ts`; the count-in feedback fix, like the one above,
   is hook-level wiring and isn't automated-tested.
+- **Noise-floor calibration fix (this build)**: the onset detector's
+  threshold was purely *relative* — is this frame louder than the recent
+  local median? — with no absolute floor. That means steady ambient noise
+  (room tone, mic self-noise, a fan) will always contain small bumps that
+  look like "peaks" relative to their own immediate surroundings, and get
+  misread as real hits, regardless of the sensitivity/smoothing sliders
+  (neither of which set an absolute floor). This is the most likely
+  explanation for the detector locking onto a fast, fluctuating tempo
+  immediately on pressing Start Listening, with no real playing at all.
+  Listening now spends its first ~0.6 seconds silently measuring the
+  ambient noise floor before attempting any onset detection, and every
+  onset candidate after that must clear that floor by a real margin (set
+  by the sensitivity slider) to count at all. Covered by new tests in
+  `onsetDetection.test.ts` (steady simulated room noise now produces zero
+  onsets; a real hit well above the floor is still detected). If a
+  Bluetooth headset's microphone is active as the input device, its much
+  lower audio quality (most phones drop to an 8-16kHz voice-call profile
+  when a Bluetooth mic is in use) could itself be a source of noisy,
+  spurious onsets — worth confirming the input device is the phone/laptop's
+  own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Sliding-window re-analysis fix (this build)**: with "Auto-start after"
+  set to Off, the BPM readout itself was still showing a stable, fast
+  (~200 BPM) tempo with no real input — ruling out both the noise-floor
+  fix above and the auto-start/count-in logic entirely, and pointing
+  squarely at the onset detector. The engine re-scanned its *entire*
+  rolling ~1.5s audio buffer from scratch every 150ms tick, relying only
+  on a small (0.05s) de-duplication window to avoid double-counting.
+  Re-scanning the same overlapping audio repeatedly can detect the exact
+  same physical blip again near a shifted buffer boundary — since the
+  adaptive threshold's context window starts at a different point each
+  tick — fabricating a steady, spurious "onset" roughly every analysis
+  tick, independent of anything real. That produces exactly a stable
+  (not fluctuating), fast, input-independent BPM. The engine now tracks
+  how much audio it has already analyzed and only re-examines genuinely
+  new audio each tick (plus a small trailing overlap purely for the
+  adaptive threshold's context, with onsets found inside that overlap
+  explicitly discarded as already-considered). This is the audio-pipeline
+  wiring itself, so — like the fixes above — it isn't unit-tested the
+  pure-module way; it needs a real microphone to actually confirm.
 - **Count-in**: covers exactly the auto-start countdown's bars and stops
   itself right as the full-volume click track begins — both are computed
   from the same numbers, so they should hand off cleanly, but this hasn't

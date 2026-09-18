@@ -1,4 +1,10 @@
-import { computeEnergyEnvelope, onsetEnvelopeFromEnergy, detectOnsets } from '../lib/onsetDetection';
+import {
+  computeEnergyEnvelope,
+  onsetEnvelopeFromEnergy,
+  detectOnsets,
+  estimateNoiseFloor,
+  maskBelowNoiseFloor,
+} from '../lib/onsetDetection';
 import { estimateTempo, type TempoEstimatorConfig } from '../lib/tempoEstimator';
 import {
   createContinuityState,
@@ -48,6 +54,13 @@ const HOP_MS = 10; // hop between energy frames (50% overlap)
 const ANALYSIS_INTERVAL_MS = 150; // how often we re-run tempo estimation
 const ONSET_HISTORY_SECONDS = 8; // trailing window of onsets fed to the estimator
 const PULL_BUFFER_SECONDS = 1.5; // how much raw audio we pull from the mic per read
+// Brief silent calibration window right as listening starts: measures the
+// ambient noise floor (room tone, mic self-noise) before trusting any
+// onset detection. Without this, quiet steady noise -- which always
+// contains small bumps relative to its own immediate surroundings -- gets
+// misread as real hits, since the peak-picker's threshold is otherwise
+// purely relative with no absolute floor.
+const CALIBRATION_DURATION_SEC = 0.6;
 
 function nowSeconds(): number {
   return performance.now() / 1000;
@@ -72,6 +85,16 @@ export class LiveTempoEngine {
 
   private onsetTimesSec: number[] = [];
   private engineState: EngineState;
+
+  // Noise-floor calibration state (see CALIBRATION_DURATION_SEC above).
+  private calibrationStartPerfSec: number | null = null;
+  private calibrationEnergySamples: number[] = [];
+  private noiseFloor: number | null = null;
+
+  // Absolute (never-resets-within-a-session) sample counters, used to
+  // analyze only genuinely new audio each tick -- see runAnalysis().
+  private totalSamplesReceived = 0;
+  private lastAnalyzedAbsSample = 0;
 
   // Rolling raw-sample buffer used to compute the energy/onset envelope for
   // the most recently captured audio chunk.
@@ -143,6 +166,7 @@ export class LiveTempoEngine {
     silentGain.connect(this.audioContext.destination);
 
     this.analysisTimer = setInterval(() => this.runAnalysis(), ANALYSIS_INTERVAL_MS);
+    this.calibrationStartPerfSec = nowSeconds();
 
     this.emit({ status: 'listening' });
   }
@@ -176,6 +200,11 @@ export class LiveTempoEngine {
   private reset(): void {
     this.onsetTimesSec = [];
     this.pendingSamples = new Float32Array(0);
+    this.calibrationStartPerfSec = null;
+    this.calibrationEnergySamples = [];
+    this.noiseFloor = null;
+    this.totalSamplesReceived = 0;
+    this.lastAnalyzedAbsSample = 0;
     this.engineState = {
       status: this.engineState.status,
       continuity: createContinuityState(),
@@ -186,6 +215,7 @@ export class LiveTempoEngine {
 
   private handleAudioProcess(event: AudioProcessingEvent): void {
     const input = event.inputBuffer.getChannelData(0);
+    this.totalSamplesReceived += input.length;
     // Append to the pending buffer, capping total length to avoid unbounded growth.
     const combined = new Float32Array(this.pendingSamples.length + input.length);
     combined.set(this.pendingSamples, 0);
@@ -214,22 +244,71 @@ export class LiveTempoEngine {
 
     const frameSize = Math.max(1, Math.round((FRAME_MS / 1000) * sampleRate));
     const hopSize = Math.max(1, Math.round((HOP_MS / 1000) * sampleRate));
-    const energy = computeEnergyEnvelope(this.pendingSamples, frameSize, hopSize);
+
+    // Only analyze audio that's genuinely new since the last tick, plus a
+    // small trailing overlap so the adaptive median threshold has context
+    // right at the start of the new segment. Re-scanning the *entire*
+    // rolling buffer from scratch every tick (the previous approach) can
+    // detect the same physical transient a second time near a shifted
+    // buffer boundary -- fabricating a steady stream of "onsets" that
+    // track the analysis timer's own cadence rather than anything real,
+    // which is indistinguishable from a real (if fast) tempo to everything
+    // downstream. This is the most likely explanation for a stable,
+    // fast BPM reading appearing with no real input at all.
+    const overlapSamples = Math.round(0.5 * sampleRate); // matches the ~50-frame adaptive median window
+    const bufferStartAbsSample = this.totalSamplesReceived - this.pendingSamples.length;
+    const newStartAbsSample = Math.max(this.lastAnalyzedAbsSample, bufferStartAbsSample);
+    if (newStartAbsSample >= this.totalSamplesReceived) {
+      return; // nothing new since the last tick
+    }
+
+    const analysisStartAbsSample = Math.max(bufferStartAbsSample, newStartAbsSample - overlapSamples);
+    const localStart = analysisStartAbsSample - bufferStartAbsSample;
+    const analysisSlice = this.pendingSamples.subarray(localStart);
+
+    const energy = computeEnergyEnvelope(analysisSlice, frameSize, hopSize);
+
+    // Calibration: for the first CALIBRATION_DURATION_SEC after listening
+    // starts, just measure the ambient noise floor -- don't attempt onset
+    // detection yet, since we don't yet know what "quiet" sounds like on
+    // this mic/room and can't tell a real hit from noise.
+    if (this.noiseFloor === null) {
+      this.calibrationEnergySamples.push(...Array.from(energy));
+      const elapsed = nowSeconds() - (this.calibrationStartPerfSec ?? nowSeconds());
+      if (elapsed < CALIBRATION_DURATION_SEC) {
+        this.lastAnalyzedAbsSample = this.totalSamplesReceived;
+        return;
+      }
+      this.noiseFloor = estimateNoiseFloor(this.calibrationEnergySamples);
+      this.calibrationEnergySamples = [];
+    }
+
     const onsetEnvelope = onsetEnvelopeFromEnergy(energy);
 
     // Sensitivity: lower threshold multiplier = more sensitive (detects quieter hits).
     const thresholdMultiplier = 2.2 - this.options.sensitivity * 1.4; // sensitivity 0..1 -> 2.2..0.8
+    // Sensitivity also sets how far above the calibrated noise floor a hit
+    // must clear to count at all -- the actual fix for false onsets from
+    // ambient noise, independent of (and in addition to) the relative
+    // adaptive threshold above.
+    const noiseFloorMargin = 3.5 - this.options.sensitivity * 2.0; // sensitivity 0..1 -> 3.5x..1.5x
+    const gatedOnsetEnvelope = maskBelowNoiseFloor(onsetEnvelope, energy, this.noiseFloor, noiseFloorMargin);
 
-    const newOnsetsRelative = detectOnsets(onsetEnvelope, {
+    const newOnsetsRelativeToSlice = detectOnsets(gatedOnsetEnvelope, {
       hopSeconds: hopSize / sampleRate,
       thresholdMultiplier,
     });
 
-    // These onset times are relative to the start of `pendingSamples`, which
-    // slides forward over time. Anchor them to absolute stream time using
-    // how much audio has been captured so far.
-    const chunkStartAbsSec = nowSeconds() - this.pendingSamples.length / sampleRate;
-    const newOnsetsAbsolute = newOnsetsRelative.map((t) => chunkStartAbsSec + t);
+    // Convert to absolute stream time, then drop anything that falls in
+    // the prepended overlap region -- those were already considered (and
+    // if real, already emitted) on a previous tick.
+    const sliceStartAbsSec = nowSeconds() - (this.totalSamplesReceived - analysisStartAbsSample) / sampleRate;
+    const newOnsetCutoffAbsSec = nowSeconds() - (this.totalSamplesReceived - newStartAbsSample) / sampleRate;
+    const newOnsetsAbsolute = newOnsetsRelativeToSlice
+      .map((t) => sliceStartAbsSec + t)
+      .filter((t) => t >= newOnsetCutoffAbsSec);
+
+    this.lastAnalyzedAbsSample = this.totalSamplesReceived;
 
     // Merge with existing onset history, de-duplicate near-identical times,
     // and keep only a trailing window.

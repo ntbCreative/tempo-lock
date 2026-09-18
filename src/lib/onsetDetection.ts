@@ -44,6 +44,48 @@ export function onsetEnvelopeFromEnergy(energy: Float32Array): Float32Array {
   return out;
 }
 
+/**
+ * Robust estimate of the ambient noise floor from a set of raw energy
+ * samples (e.g. collected during a brief silent-ish calibration window
+ * right as listening starts). Uses the median rather than the mean so a
+ * stray early transient (a button click, a single early tap) doesn't
+ * blow out the estimate.
+ */
+export function estimateNoiseFloor(energySamples: number[]): number {
+  if (energySamples.length === 0) return 0;
+  const sorted = [...energySamples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * Zeroes out onset-envelope entries whose underlying raw energy doesn't
+ * clear `noiseFloor * marginMultiplier`. `onsetEnvelope` and `energy` must
+ * be the same length (both derived from the same frames).
+ *
+ * This is the actual fix for false onsets from ambient noise: the
+ * adaptive threshold in `detectOnsets` is purely *relative* (is this
+ * louder than what just came before it?), which means quiet, steady room
+ * noise or mic self-noise will always contain small bumps that look like
+ * "peaks" relative to their own immediate surroundings -- there's no
+ * absolute floor below which a bump simply isn't a real hit. This applies
+ * an absolute gate on top of that relative one.
+ */
+export function maskBelowNoiseFloor(
+  onsetEnvelope: Float32Array,
+  energy: Float32Array,
+  noiseFloor: number,
+  marginMultiplier: number
+): Float32Array {
+  const out = new Float32Array(onsetEnvelope.length);
+  const requiredEnergy = noiseFloor * marginMultiplier;
+  for (let i = 0; i < onsetEnvelope.length; i++) {
+    const frameEnergy = i < energy.length ? energy[i] : 0;
+    out[i] = frameEnergy >= requiredEnergy ? onsetEnvelope[i] : 0;
+  }
+  return out;
+}
+
 export interface PeakPickingConfig {
   /** Seconds represented by one envelope frame (i.e. hopSize / sampleRate). */
   hopSeconds: number;
