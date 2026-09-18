@@ -99,3 +99,29 @@ export function parseCustomAccentBeats(input: string, beatsPerBar: number): numb
   }
   return Array.from(seen).sort((a, b) => a - b);
 }
+
+/**
+ * Optional extra clicks evenly spaced between the main beat clicks -- a
+ * quieter, plain tick layered under the accented beat pattern above.
+ * Genuinely useful for practicing subdivided rhythms (linear fills, swung
+ * eighths, triplet-based grooves) against a reference.
+ */
+export type Subdivision = 'none' | 'eighth' | 'triplet';
+
+export const SUBDIVISION_OPTIONS: { label: string; value: Subdivision }[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Eighths', value: 'eighth' },
+  { label: 'Triplets', value: 'triplet' },
+];
+
+/** How many ticks make up one beat for a given subdivision setting (1 = just the beat itself). */
+export function subdivisionTicksPerBeat(subdivision: Subdivision): number {
+  switch (subdivision) {
+    case 'eighth':
+      return 2;
+    case 'triplet':
+      return 3;
+    default:
+      return 1;
+  }
+}

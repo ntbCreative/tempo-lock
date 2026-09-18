@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
-import type { AccentMode, SoundKit } from './lib/clickPattern';
-import { SOUND_KITS } from './lib/clickPattern';
+import type { AccentMode, SoundKit, Subdivision } from './lib/clickPattern';
+import { SOUND_KITS, SUBDIVISION_OPTIONS } from './lib/clickPattern';
 import { THEMES, type ThemeId } from './lib/themes';
 import { createSilentWavDataUri } from './audio/silentAudio';
 
@@ -254,6 +254,24 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
             ? '2 & 4 clap mode uses a dedicated clap sound.'
             : '2 & 4 clap mode plays this sound, accented, on beats 2 and 4.'}
         </p>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="subdivision">Subdivision</label>
+        </div>
+        <select
+          id="subdivision"
+          value={settings.subdivision}
+          onChange={(e) => updateSettings({ subdivision: e.target.value as Subdivision })}
+        >
+          {SUBDIVISION_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="settings-note">Adds quiet ticks between the main beat clicks.</p>
       </div>
     </div>
   );

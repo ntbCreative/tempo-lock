@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats, clapVoiceForKit } from './clickPattern';
+import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats, clapVoiceForKit, subdivisionTicksPerBeat } from './clickPattern';
 
 describe('clickPattern: accent modes', () => {
   it('"all" plays every beat as a plain click with no accent', () => {
@@ -85,5 +85,19 @@ describe('clickPattern: clapVoiceForKit', () => {
     expect(clapVoiceForKit('cowbell')).toBe('kit-accent');
     expect(clapVoiceForKit('hihat')).toBe('kit-accent');
     expect(clapVoiceForKit('clave')).toBe('kit-accent');
+  });
+});
+
+describe('clickPattern: subdivisionTicksPerBeat', () => {
+  it('is 1 tick per beat for "none"', () => {
+    expect(subdivisionTicksPerBeat('none')).toBe(1);
+  });
+
+  it('is 2 ticks per beat for "eighth"', () => {
+    expect(subdivisionTicksPerBeat('eighth')).toBe(2);
+  });
+
+  it('is 3 ticks per beat for "triplet"', () => {
+    expect(subdivisionTicksPerBeat('triplet')).toBe(3);
   });
 });

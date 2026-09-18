@@ -84,6 +84,14 @@ Web-Audio wiring layer:
 
 - Live BPM detection from mic input, with a locked/finding/low-confidence
   status and a smoothed, jump-resistant display.
+- **Live / Recording mode toggle**: Live analyzes the raw broadband
+  signal (right for a stick/kit hit — a sharp transient across the whole
+  spectrum). Recording low-passes the signal first to isolate the
+  kick/bass pulse before analyzing, which is what lets a full song
+  (vocals, guitar, synths all layered in the same mic pickup) come
+  through as a countable pulse instead of a wash of onsets from every
+  instrument firing at once. Only takes effect on the next Start
+  Listening.
 - Tap Tempo, independent of the detector.
 - A configurable click track: time signature (2/4–6/8), accent mode (all
   beats, accent-the-downbeat, "2 & 4 clap" backbeat, or custom beats), and
@@ -117,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (153 tests as of this build).
+Run `npm run test` for the full suite (156 tests as of this build).
 
 ## Known real-world limitations
 
@@ -163,6 +171,18 @@ real kit has not been measured. In particular:
   Clave) are synthesized from oscillators and filtered noise, not sampled
   recordings, so they're a reasonable approximation of the real instrument
   rather than a recording of one.
+- **Subdivisions**: Settings → Sounds → Subdivision adds quiet, plain
+  ticks evenly spaced between the main beat clicks (eighths = 1 extra
+  tick per beat, triplets = 2). Genuinely useful for practicing subdivided
+  rhythms against a reference. Applies to both the manual click track and
+  the mic-triggered auto-start.
+- **Visual beat pulse**: a small dot next to the BPM readout. Flashes in
+  time with the actual click track when one is playing (driven by the
+  same position polling as the Bar/Beat readout). When no click is
+  playing but a tempo is locked from the mic, it pulses continuously at
+  that tempo instead — this one is an approximate visual reference, not
+  phase-locked to your actual hits, since there's no click audio to sync
+  it to.
 - **Confidence calibration fix (this build)**: the tempo estimator's
   confidence used to be the winning candidate's *share* of vote weight
   across all harmonic candidates (fundamental, half-time, double-time,
@@ -252,6 +272,13 @@ real kit has not been measured. In particular:
   explicitly discarded as already-considered). This is the audio-pipeline
   wiring itself, so — like the fixes above — it isn't unit-tested the
   pure-module way; it needs a real microphone to actually confirm.
+- **Recording mode**: a first pass at full-mix tempo detection — a single
+  150Hz low-pass filter to isolate the kick/bass pulse, with all the same
+  frame/hop/debounce timing as Live mode. Real beat-tracking tools go
+  further (dedicated kick/snare separation, tempo-specific tuning per
+  genre); this is a reasonable starting point, not a guarantee it'll
+  nail every song's tempo, especially bass-light genres or masters where
+  the kick isn't prominent. Untested against a real recording so far.
 - **Count-in**: covers exactly the auto-start countdown's bars and stops
   itself right as the full-volume click track begins — both are computed
   from the same numbers, so they should hand off cleanly, but this hasn't

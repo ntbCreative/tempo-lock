@@ -31,6 +31,16 @@ export type EngineStatus =
   | 'listening'
   | 'error';
 
+/**
+ * 'live' analyzes the raw broadband signal -- right for a stick/kit hit,
+ * which is a sharp transient across the whole spectrum. 'recording' first
+ * low-passes the signal to isolate the kick/bass pulse before analyzing,
+ * which is what lets a full song (vocals, guitar, synths all layered in
+ * the same mic pickup) come through as a clean, countable pulse instead
+ * of a wash of simultaneous "onsets" from every instrument at once.
+ */
+export type DetectionMode = 'live' | 'recording';
+
 export interface EngineState {
   status: EngineStatus;
   continuity: ContinuityState;
@@ -45,8 +55,10 @@ export interface EngineOptions {
   sensitivity: number; // 0-1, adjusts onset detection threshold (higher = more sensitive)
   minBpm: number;
   maxBpm: number;
+  mode: DetectionMode;
   onUpdate: (state: EngineState) => void;
 }
+
 
 const SAMPLE_RATE_HINT = 44100;
 const FRAME_MS = 20; // energy frame size
@@ -80,6 +92,7 @@ export class LiveTempoEngine {
   private audioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private lowpassNode: BiquadFilterNode | null = null;
   private scriptNode: ScriptProcessorNode | null = null;
   private analysisTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -158,10 +171,23 @@ export class LiveTempoEngine {
     this.scriptNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
     this.scriptNode.onaudioprocess = (event) => this.handleAudioProcess(event);
 
+    // In 'recording' mode, isolate the kick/bass pulse with a low-pass
+    // filter before the analysis pipeline ever sees the signal, so a full
+    // mix's vocals/guitar/synths don't each register as their own onsets.
+    let analysisInput: AudioNode = this.sourceNode;
+    if (this.options.mode === 'recording') {
+      this.lowpassNode = this.audioContext.createBiquadFilter();
+      this.lowpassNode.type = 'lowpass';
+      this.lowpassNode.frequency.value = 150;
+      this.lowpassNode.Q.value = 1;
+      this.sourceNode.connect(this.lowpassNode);
+      analysisInput = this.lowpassNode;
+    }
+
     // Connect through a zero-gain node so we never play the mic back out loud.
     const silentGain = this.audioContext.createGain();
     silentGain.gain.value = 0;
-    this.sourceNode.connect(this.scriptNode);
+    analysisInput.connect(this.scriptNode);
     this.scriptNode.connect(silentGain);
     silentGain.connect(this.audioContext.destination);
 
@@ -180,6 +206,10 @@ export class LiveTempoEngine {
       this.scriptNode.onaudioprocess = null;
       this.scriptNode.disconnect();
       this.scriptNode = null;
+    }
+    if (this.lowpassNode) {
+      this.lowpassNode.disconnect();
+      this.lowpassNode = null;
     }
     if (this.sourceNode) {
       this.sourceNode.disconnect();

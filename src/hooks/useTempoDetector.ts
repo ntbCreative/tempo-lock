@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LiveTempoEngine, isMicrophoneSupported, type EngineState } from '../audio/liveTempoEngine';
+import { LiveTempoEngine, isMicrophoneSupported, type EngineState, type DetectionMode } from '../audio/liveTempoEngine';
 import { MetronomeEngine, type MetronomePosition } from '../audio/metronomeEngine';
 import { createContinuityState } from '../lib/continuity';
 import {
@@ -8,7 +8,7 @@ import {
   type BarCount,
   type BarCountdownState,
 } from '../lib/metronomeSchedule';
-import { parseCustomAccentBeats, type AccentMode, type SoundKit } from '../lib/clickPattern';
+import { parseCustomAccentBeats, type AccentMode, type SoundKit, type Subdivision } from '../lib/clickPattern';
 import type { TempoRampConfig } from '../lib/tempoRamp';
 import { createTapTempoState, registerTap, type TapTempoState } from '../lib/tapTempo';
 import { parseStoredSettings, serializeSettings } from '../lib/settingsStorage';
@@ -32,12 +32,16 @@ export interface DetectorSettings {
   sensitivity: number;
   minBpm: number;
   maxBpm: number;
+  /** 'live' analyzes the raw signal (right for stick/kit hits); 'recording' low-passes it first to isolate the kick/bass pulse in a full mix. */
+  mode: DetectionMode;
   metronomeBars: BarCount;
   beatsPerBar: number;
   accentMode: AccentMode;
   customAccentBeatsInput: string;
   clickTrackLengthBars: number;
   soundKit: SoundKit;
+  /** Extra evenly-spaced ticks between the main beat clicks. */
+  subdivision: Subdivision;
   countInEnabled: boolean;
   countInVolume: number;
   rampEnabled: boolean;
@@ -51,12 +55,14 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   sensitivity: 0.5,
   minBpm: 40,
   maxBpm: 240,
+  mode: 'live',
   metronomeBars: 0,
   beatsPerBar: 4,
   accentMode: 'first',
   customAccentBeatsInput: '1',
   clickTrackLengthBars: 0,
   soundKit: 'digital',
+  subdivision: 'none',
   countInEnabled: true,
   countInVolume: 0.35,
   rampEnabled: false,
@@ -71,6 +77,7 @@ export interface SongPresetData {
   accentMode: AccentMode;
   customAccentBeatsInput: string;
   soundKit: SoundKit;
+  subdivision: Subdivision;
   clickTrackLengthBars: number;
   metronomeBars: BarCount;
 }
@@ -241,6 +248,7 @@ export function useTempoDetector() {
               accentMode: cfg.accentMode,
               customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
               soundKit: cfg.soundKit,
+              subdivision: cfg.subdivision,
               totalBars: cfg.metronomeBars,
               volumeScale: cfg.countInVolume,
             });
@@ -257,6 +265,7 @@ export function useTempoDetector() {
             accentMode: cfg.accentMode,
             customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
             soundKit: cfg.soundKit,
+            subdivision: cfg.subdivision,
             totalBars: 0,
           });
           setMetronomeActive(true);
@@ -353,6 +362,7 @@ export function useTempoDetector() {
       accentMode: cfg.accentMode,
       customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
       soundKit: cfg.soundKit,
+      subdivision: cfg.subdivision,
       totalBars: cfg.clickTrackLengthBars,
       ramp,
       onFinished: () => {
@@ -373,6 +383,7 @@ export function useTempoDetector() {
       accentMode: settingsRef.current.accentMode,
       customAccentBeatsInput: settingsRef.current.customAccentBeatsInput,
       soundKit: settingsRef.current.soundKit,
+      subdivision: settingsRef.current.subdivision,
       clickTrackLengthBars: settingsRef.current.clickTrackLengthBars,
       metronomeBars: settingsRef.current.metronomeBars,
     }),
@@ -407,6 +418,7 @@ export function useTempoDetector() {
         accentMode: preset.data.accentMode,
         customAccentBeatsInput: preset.data.customAccentBeatsInput,
         soundKit: preset.data.soundKit,
+        subdivision: preset.data.subdivision,
         clickTrackLengthBars: preset.data.clickTrackLengthBars,
         metronomeBars: preset.data.metronomeBars,
       });

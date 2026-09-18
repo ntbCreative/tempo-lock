@@ -114,6 +114,22 @@ function App() {
         <div className="bpm-readout" role="status" aria-live="polite">
           <span className="bpm-readout__value">{displayBpm ?? '--'}</span>
           <span className="bpm-readout__unit">BPM</span>
+          {metronomeActive && metronomePosition ? (
+            <span
+              key={`click-${metronomePosition.barIndex}-${metronomePosition.beatInBar}`}
+              className="beat-pulse beat-pulse--flash"
+              aria-hidden="true"
+            />
+          ) : continuity.status === 'locked' && continuity.displayedBpm ? (
+            <span
+              key={`tempo-${Math.round(continuity.displayedBpm)}`}
+              className="beat-pulse beat-pulse--tempo"
+              style={{ animationDuration: `${60000 / continuity.displayedBpm}ms` }}
+              aria-hidden="true"
+            />
+          ) : (
+            <span className="beat-pulse beat-pulse--idle" aria-hidden="true" />
+          )}
         </div>
 
         <div className="meter-row">
@@ -171,6 +187,32 @@ function App() {
             Microphone access was denied. Allow microphone access in your browser settings, then try again.
           </p>
         )}
+
+        <div className="mode-toggle" role="group" aria-label="Detection mode">
+          <button
+            type="button"
+            className="mode-toggle__option"
+            data-active={settings.mode === 'live'}
+            onClick={() => updateSettings({ mode: 'live' })}
+            disabled={isListening}
+          >
+            Live
+          </button>
+          <button
+            type="button"
+            className="mode-toggle__option"
+            data-active={settings.mode === 'recording'}
+            onClick={() => updateSettings({ mode: 'recording' })}
+            disabled={isListening}
+          >
+            Recording
+          </button>
+        </div>
+        <p className="settings-note mode-toggle__hint">
+          {settings.mode === 'live'
+            ? 'Tuned for sticks/kit hits.'
+            : 'Tuned for a full song through speakers — isolates the kick/bass pulse.'}
+        </p>
 
         <button
           type="button"

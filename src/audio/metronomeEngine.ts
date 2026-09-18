@@ -3,9 +3,11 @@ import {
   resolveClickSound,
   beatIndexInBar as computeBeatIndexInBar,
   clapVoiceForKit,
+  subdivisionTicksPerBeat,
   type AccentMode,
   type ClickSound,
   type SoundKit,
+  type Subdivision,
 } from '../lib/clickPattern';
 import { bpmForBar, clickIndexAtElapsedTime, type TempoRampConfig } from '../lib/tempoRamp';
 
@@ -21,6 +23,8 @@ export interface MetronomeStartOptions {
   accentMode?: AccentMode;
   customAccentBeats?: number[];
   soundKit?: SoundKit;
+  /** Extra evenly-spaced ticks between the main beat clicks; 'none' (default) plays just the beat itself. */
+  subdivision?: Subdivision;
   totalBars?: number;
   volumeScale?: number;
   ramp?: TempoRampConfig;
@@ -40,6 +44,8 @@ export class MetronomeEngine {
   private perfToAudioOffset = 0;
   private nextClickIndex = 0;
   private nextClickTimePerfSec = 0;
+  private nextSubTick = 0;
+  private subdivisionTicks = 1;
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
@@ -75,6 +81,7 @@ export class MetronomeEngine {
     this.accentMode = options.accentMode ?? 'first';
     this.customAccentBeats = options.customAccentBeats ?? [];
     this.soundKit = options.soundKit ?? 'digital';
+    this.subdivisionTicks = subdivisionTicksPerBeat(options.subdivision ?? 'none');
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
     this.ramp = options.ramp ?? null;
@@ -82,6 +89,7 @@ export class MetronomeEngine {
     this.startPerfSec = startAtPerfSec;
     this.nextClickIndex = 0;
     this.nextClickTimePerfSec = startAtPerfSec;
+    this.nextSubTick = 0;
     this.running = true;
 
     this.schedulerTimer = setInterval(() => this.scheduleUpcomingClicks(), SCHEDULER_INTERVAL_MS);
@@ -124,28 +132,40 @@ export class MetronomeEngine {
     const horizonPerfSec = nowSeconds() + LOOKAHEAD_SEC;
 
     while (this.nextClickTimePerfSec <= horizonPerfSec) {
-      const sessionPos = computeSessionPosition(this.nextClickIndex, this.beatsPerBar, this.totalBars);
-      if (sessionPos.finished) {
-        const onFinished = this.onFinished;
-        this.stop();
-        onFinished?.();
-        return;
+      const isMainBeat = this.nextSubTick === 0;
+
+      if (isMainBeat) {
+        const sessionPos = computeSessionPosition(this.nextClickIndex, this.beatsPerBar, this.totalBars);
+        if (sessionPos.finished) {
+          const onFinished = this.onFinished;
+          this.stop();
+          onFinished?.();
+          return;
+        }
       }
 
-      const bpmForThisClick = this.bpmForClickIndex(this.nextClickIndex);
+      const bpmForThisBeat = this.bpmForClickIndex(this.nextClickIndex);
       const audioTime = this.nextClickTimePerfSec + this.perfToAudioOffset;
       if (audioTime >= this.audioContext.currentTime) {
-        const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
-        const sound = resolveClickSound(beatInBar, {
-          accentMode: this.accentMode,
-          beatsPerBar: this.beatsPerBar,
-          customAccentBeats: this.customAccentBeats,
-        });
-        this.playClick(audioTime, sound);
+        if (isMainBeat) {
+          const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
+          const sound = resolveClickSound(beatInBar, {
+            accentMode: this.accentMode,
+            beatsPerBar: this.beatsPerBar,
+            customAccentBeats: this.customAccentBeats,
+          });
+          this.playClick(audioTime, sound);
+        } else {
+          this.playSubdivisionTick(audioTime);
+        }
       }
 
-      this.nextClickIndex += 1;
-      this.nextClickTimePerfSec += 60 / bpmForThisClick;
+      this.nextSubTick += 1;
+      if (this.nextSubTick >= this.subdivisionTicks) {
+        this.nextSubTick = 0;
+        this.nextClickIndex += 1;
+      }
+      this.nextClickTimePerfSec += 60 / bpmForThisBeat / this.subdivisionTicks;
     }
   }
 
@@ -299,6 +319,11 @@ export class MetronomeEngine {
 
   private playClave(audioTime: number, accent: boolean): void {
     this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.38 : 0.24, duration: 0.02 });
+  }
+
+  /** A quiet, plain tick for subdivision clicks -- deliberately simple and consistent regardless of the chosen sound kit, so it's clearly distinguishable from the main beat. */
+  private playSubdivisionTick(audioTime: number): void {
+    this.playTone(audioTime, { freq: 900, peak: 0.14, duration: 0.02 });
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {
