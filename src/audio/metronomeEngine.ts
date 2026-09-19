@@ -1,4 +1,4 @@
-import { computeSessionPosition } from '../lib/metronomeSchedule';
+import { computeSessionPosition, blendTowards } from '../lib/metronomeSchedule';
 import {
   resolveClickSound,
   beatIndexInBar as computeBeatIndexInBar,
@@ -61,6 +61,20 @@ export class MetronomeEngine {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * Gently nudges the running tempo toward `targetBpm` instead of snapping
+   * to it -- for tracking ongoing drift in a live tempo (a band naturally
+   * speeding up/slowing down slightly) without an audible jump. No-ops
+   * during a ramp session, which has its own programmed tempo schedule
+   * that an external nudge would fight. Only affects clicks not yet
+   * scheduled (anything already within the lookahead window keeps its
+   * originally-scheduled timing), so it never causes a stutter.
+   */
+  updateBpm(targetBpm: number, blendFactor = 0.15): void {
+    if (!this.running || this.ramp) return;
+    this.bpm = blendTowards(this.bpm, targetBpm, blendFactor);
   }
 
   start(bpm: number, startAtPerfSec: number, beatsPerBarOrOptions: number | MetronomeStartOptions = {}): void {

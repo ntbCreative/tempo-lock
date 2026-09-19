@@ -272,6 +272,19 @@ export function useTempoDetector() {
           setMetronomeBpm(result.metronomeBpm);
           startPositionPoll();
         }
+
+        // While a click track is already playing and the mic is still
+        // listening, gently nudge its tempo toward whatever's currently
+        // detected instead of leaving it running open-loop forever -- this
+        // is what lets it track a live tempo that drifts slightly over the
+        // course of a song rather than locking in one number for good.
+        if (
+          metronomeEngineRef.current?.isRunning() &&
+          state.continuity.displayedBpm !== null &&
+          state.continuity.status !== 'finding'
+        ) {
+          metronomeEngineRef.current.updateBpm(state.continuity.displayedBpm);
+        }
       },
     });
     return () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
 import Settings from './Settings';
 import './App.css';
@@ -56,6 +56,8 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const prevMetronomeActiveRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -65,11 +67,29 @@ function App() {
   const { continuity } = engineState;
   const label = statusLabel(engineState.status, continuity.status);
 
+  // Screen-reader announcements: the status label changes rarely enough to
+  // announce every time (unlike the BPM number, which updates many times a
+  // second and would be overwhelming to have read aloud continuously).
+  useEffect(() => {
+    setAnnouncement(label);
+  }, [label]);
+
+  useEffect(() => {
+    if (metronomeActive && !prevMetronomeActiveRef.current) {
+      setAnnouncement(`Click track started${metronomeBpm !== null ? ` at ${Math.round(metronomeBpm)} beats per minute` : ''}`);
+    } else if (!metronomeActive && prevMetronomeActiveRef.current) {
+      setAnnouncement('Click track stopped');
+    }
+    prevMetronomeActiveRef.current = metronomeActive;
+  }, [metronomeActive, metronomeBpm]);
+
   const displayBpm = useMemo(() => {
-    if (continuity.displayedBpm !== null) return Math.round(continuity.displayedBpm);
-    if (tapState.bpm !== null) return Math.round(tapState.bpm);
+    if (continuity.displayedBpm !== null) return continuity.displayedBpm.toFixed(1);
+    if (tapState.bpm !== null) return tapState.bpm.toFixed(1);
     return null;
   }, [continuity.displayedBpm, tapState.bpm]);
+
+  const bpmAriaLabel = displayBpm !== null ? `Current tempo: ${displayBpm} beats per minute` : 'No tempo detected yet';
 
   const statusClass = isListening
     ? continuity.status === 'locked'
@@ -111,9 +131,17 @@ function App() {
       </header>
 
       <main className="stage__main">
-        <div className="bpm-readout" role="status" aria-live="polite">
-          <span className="bpm-readout__value">{displayBpm ?? '--'}</span>
-          <span className="bpm-readout__unit">BPM</span>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+
+        <div className="bpm-readout" role="group" aria-label={bpmAriaLabel}>
+          <span className="bpm-readout__value" aria-hidden="true">
+            {displayBpm ?? '--'}
+          </span>
+          <span className="bpm-readout__unit" aria-hidden="true">
+            BPM
+          </span>
           {metronomeActive && metronomePosition ? (
             <span
               key={`click-${metronomePosition.barIndex}-${metronomePosition.beatInBar}`}
@@ -164,7 +192,7 @@ function App() {
 
         {metronomeActive && (
           <p className="notice notice--metronome">
-            Click track at {clickTrackBpm} BPM
+            Click track at {clickTrackBpm !== null ? clickTrackBpm.toFixed(1) : '--'} BPM
             {metronomePosition && (
               <>
                 {' · Bar '}
@@ -193,6 +221,7 @@ function App() {
             type="button"
             className="mode-toggle__option"
             data-active={settings.mode === 'live'}
+            aria-pressed={settings.mode === 'live'}
             onClick={() => updateSettings({ mode: 'live' })}
             disabled={isListening}
           >
@@ -202,6 +231,7 @@ function App() {
             type="button"
             className="mode-toggle__option"
             data-active={settings.mode === 'recording'}
+            aria-pressed={settings.mode === 'recording'}
             onClick={() => updateSettings({ mode: 'recording' })}
             disabled={isListening}
           >
@@ -241,12 +271,13 @@ function App() {
             <div className="manual-metronome__bpm">
               <input
                 type="number"
+                aria-label="Manual tempo in beats per minute"
                 min={settings.minBpm}
                 max={settings.maxBpm}
                 value={manualBpm}
                 onChange={(e) => setManualBpm(Number(e.target.value))}
               />
-              <span>BPM</span>
+              <span aria-hidden="true">BPM</span>
             </div>
             <button type="button" className="pill-button" onClick={doubleManualBpm} aria-label="Double tempo">
               2×
@@ -254,6 +285,7 @@ function App() {
           </div>
           <input
             type="range"
+            aria-label="Manual tempo slider"
             min={settings.minBpm}
             max={settings.maxBpm}
             step={1}
@@ -270,6 +302,7 @@ function App() {
             <input
               type="text"
               className="setlist__name-input"
+              aria-label="Preset name"
               placeholder="Save current setup as…"
               value={newPresetName}
               onChange={(e) => setNewPresetName(e.target.value)}
@@ -277,7 +310,13 @@ function App() {
                 if (e.key === 'Enter') handleSavePreset();
               }}
             />
-            <button type="button" className="pill-button" onClick={handleSavePreset} disabled={!newPresetName.trim()}>
+            <button
+              type="button"
+              className="pill-button"
+              onClick={handleSavePreset}
+              disabled={!newPresetName.trim()}
+              aria-label="Save current setup as a new preset"
+            >
               Save
             </button>
           </div>

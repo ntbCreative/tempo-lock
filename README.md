@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (156 tests as of this build).
+Run `npm run test` for the full suite (162 tests as of this build).
 
 ## Known real-world limitations
 
@@ -176,6 +176,20 @@ real kit has not been measured. In particular:
   tick per beat, triplets = 2). Genuinely useful for practicing subdivided
   rhythms against a reference. Applies to both the manual click track and
   the mic-triggered auto-start.
+- **Live tempo tracking**: while a click track is playing and the mic is
+  still listening, its tempo continuously nudges toward whatever's
+  currently detected — a gentle blend (15% of the gap per tick), not a
+  snap, so a band's natural tempo drift over a song gets tracked instead
+  of the click running open-loop at whatever it locked at initially. This
+  corrects the *speed* going forward; it doesn't retroactively fix
+  accumulated *phase* error from before the correction started (a full
+  phase-locked sync — always landing exactly on the beat — is a
+  meaningfully bigger undertaking than this). No-ops during a ramp
+  session, which has its own programmed schedule.
+- **BPM readout precision**: both the live detected BPM and the running
+  click track's tempo now display to 1 decimal place, since the
+  underlying numbers are never actually whole — useful for judging how
+  close (or not) the detector and the click currently are.
 - **Visual beat pulse**: a small dot next to the BPM readout. Flashes in
   time with the actual click track when one is playing (driven by the
   same position polling as the Bar/Beat readout). When no click is
@@ -288,6 +302,27 @@ real kit has not been measured. In particular:
   polling the engine's position every 100ms, so it can lag the actual
   audio by up to that long.
 - **Presets**: capture BPM, signature, click mode/custom beats, sound kit,
+  auto-start bars, and session length — not the detector settings
+  (smoothing/sensitivity/range) or theme, since those are more "how I like
+  the app to behave" than "how this song goes."
+- **VoiceOver / screen-reader support**: the BPM number no longer sits in
+  a continuously-announcing live region (it changes many times a second,
+  which would be overwhelming) — it's now readable on demand as a single
+  summary ("Current tempo: 128.4 beats per minute"). A separate, quieter
+  live region announces meaningful state changes instead: status
+  transitions (Locked, Finding tempo…) and the click track starting or
+  stopping. Every control that lacked an accessible name now has one
+  (manual BPM input/slider, preset name field, mode/theme toggles now
+  also expose their selected state via `aria-pressed`). The Settings
+  drag-to-reorder list — which native HTML drag-and-drop doesn't support
+  with VoiceOver at all — now has Move Up/Move Down buttons on every
+  section as a first-class alternative, not a hidden fallback. The
+  Settings panel is now a proper dialog (announced as one, closes on
+  Escape). This is UI/markup work with no pure-logic surface, so — like
+  the audio-pipeline fixes above — it isn't unit-tested; it was built
+  from a careful audit but hasn't been run through an actual screen
+  reader yet, so real testing with VoiceOver would be the next step to
+  confirm it holds up in practice.
   auto-start bars, and session length — not the detector settings
   (smoothing/sensitivity/range) or theme, since those are more "how I like
   the app to behave" than "how this song goes."

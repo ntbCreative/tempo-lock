@@ -371,15 +371,16 @@ function AppearanceSection({ theme, setTheme }: SettingsProps) {
     <div className="settings-section__body">
       <div className="control">
         <div className="control__label-row">
-          <label>Color theme</label>
+          <span id="theme-group-label">Color theme</span>
         </div>
-        <div className="theme-swatches">
+        <div className="theme-swatches" role="group" aria-labelledby="theme-group-label">
           {THEMES.map((option) => (
             <button
               key={option.id}
               type="button"
               className="theme-swatch"
               data-active={theme === option.id}
+              aria-pressed={theme === option.id}
               style={{ background: option.swatch }}
               aria-label={option.label}
               onClick={() => setTheme(option.id)}
@@ -390,7 +391,7 @@ function AppearanceSection({ theme, setTheme }: SettingsProps) {
 
       <div className="control">
         <div className="control__label-row">
-          <label>AirPlay</label>
+          <span>AirPlay</span>
         </div>
         {airplaySupported ? (
           <button type="button" className="airplay-button" onClick={showAirplayPicker}>
@@ -422,19 +423,36 @@ export default function Settings(props: SettingsProps) {
   const { sectionOrder, reorderSections, onClose } = props;
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="settings-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="settings-panel__header">
-          <span className="settings-panel__title">Settings</span>
+          <span id="settings-title" className="settings-panel__title">
+            Settings
+          </span>
           <button type="button" className="settings-panel__close" onClick={onClose} aria-label="Close settings">
             ✕
           </button>
         </div>
-        <p className="settings-note">Drag a section's handle to reorder it.</p>
+        <p className="settings-note">Drag a section's handle to reorder it, or use the arrow buttons.</p>
 
         {sectionOrder.map((sectionId, index) => {
           const Renderer = SECTION_RENDERERS[sectionId];
+          const title = SECTION_TITLES[sectionId];
           return (
             <div
               key={sectionId}
@@ -456,7 +474,27 @@ export default function Settings(props: SettingsProps) {
                 <span className="settings-section__grip" aria-hidden="true">
                   ⠿
                 </span>
-                <span className="settings-section__title">{SECTION_TITLES[sectionId]}</span>
+                <span className="settings-section__title">{title}</span>
+                <div className="settings-section__reorder">
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderSections(index, index - 1)}
+                    disabled={index === 0}
+                    aria-label={`Move ${title} section up`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderSections(index, index + 1)}
+                    disabled={index === sectionOrder.length - 1}
+                    aria-label={`Move ${title} section down`}
+                  >
+                    ▼
+                  </button>
+                </div>
               </div>
               <Renderer {...props} />
             </div>

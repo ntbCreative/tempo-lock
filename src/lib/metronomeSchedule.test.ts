@@ -5,6 +5,7 @@ import {
   computeClickTimes,
   computeSessionPosition,
   isDownbeat,
+  blendTowards,
   type BarCountdownState,
 } from './metronomeSchedule';
 
@@ -209,5 +210,33 @@ describe('metronomeSchedule: session position', () => {
     const pos = computeSessionPosition(7, 3, 0);
     expect(pos.barIndex).toBe(2);
     expect(pos.beatInBar).toBe(1);
+  });
+});
+
+describe('metronomeSchedule: blendTowards', () => {
+  it('leaves current unchanged at factor 0', () => {
+    expect(blendTowards(120, 130, 0)).toBe(120);
+  });
+
+  it('snaps straight to target at factor 1', () => {
+    expect(blendTowards(120, 130, 1)).toBe(130);
+  });
+
+  it('moves partway toward the target at an intermediate factor', () => {
+    expect(blendTowards(120, 130, 0.5)).toBe(125);
+    expect(blendTowards(120, 140, 0.25)).toBe(125);
+  });
+
+  it('works when the target is lower than current', () => {
+    expect(blendTowards(130, 120, 0.5)).toBe(125);
+  });
+
+  it('clamps an out-of-range factor', () => {
+    expect(blendTowards(120, 130, -1)).toBe(120);
+    expect(blendTowards(120, 130, 2)).toBe(130);
+  });
+
+  it('is a no-op when current already equals target', () => {
+    expect(blendTowards(120, 120, 0.5)).toBe(120);
   });
 });

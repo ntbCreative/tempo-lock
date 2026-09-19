@@ -157,3 +157,16 @@ export function computeSessionPosition(clickIndex: number, beatsPerBar: number, 
   const remainingBars = totalBars > 0 ? Math.max(0, totalBars - barIndex) : null;
   return { clickIndex, barIndex, beatInBar, remainingBars, finished };
 }
+
+/**
+ * Moves `current` a `factor` (0-1) fraction of the way toward `target`.
+ * Used to gently nudge a running click track's tempo toward whatever the
+ * mic keeps detecting while it plays, rather than either ignoring ongoing
+ * drift entirely or snapping to every new reading (which would sound like
+ * a stutter). factor 0 leaves `current` unchanged; factor 1 snaps
+ * straight to `target`.
+ */
+export function blendTowards(current: number, target: number, factor: number): number {
+  const safeFactor = Math.max(0, Math.min(1, factor));
+  return current + (target - current) * safeFactor;
+}
