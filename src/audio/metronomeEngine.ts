@@ -10,6 +10,7 @@ import {
   type Subdivision,
 } from '../lib/clickPattern';
 import { bpmForBar, clickIndexAtElapsedTime, type TempoRampConfig } from '../lib/tempoRamp';
+import { effectiveTicksPerBeat, stepHalfTimeParity, type FeelMultiplier } from '../lib/feel';
 
 const LOOKAHEAD_SEC = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
@@ -25,6 +26,8 @@ export interface MetronomeStartOptions {
   soundKit?: SoundKit;
   /** Extra evenly-spaced ticks between the main beat clicks; 'none' (default) plays just the beat itself. */
   subdivision?: Subdivision;
+  /** Live half/double-time feel, separate from `subdivision` -- see setFeel(). */
+  feel?: FeelMultiplier;
   totalBars?: number;
   volumeScale?: number;
   ramp?: TempoRampConfig;
@@ -46,6 +49,9 @@ export class MetronomeEngine {
   private nextClickTimePerfSec = 0;
   private nextSubTick = 0;
   private subdivisionTicks = 1;
+  private feel: FeelMultiplier = 1;
+  private halfTimeParity: 0 | 1 = 0;
+  private currentTickMuted = false;
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
@@ -77,6 +83,26 @@ export class MetronomeEngine {
     this.bpm = blendTowards(this.bpm, targetBpm, blendFactor);
   }
 
+  /**
+   * Live-toggles half/double-time feel on the currently running click,
+   * without stopping, restarting, or touching the underlying tempo/bar
+   * position. Takes effect starting from the next beat boundary (or, for
+   * double-time engaged mid-beat, the next sub-tick) -- never a hard cut
+   * or phase jump. See src/lib/feel.ts for how this is scheduled.
+   */
+  setFeel(feel: FeelMultiplier): void {
+    if (!this.running || feel === this.feel) return;
+    this.feel = feel;
+    // Restart the half-time skip cycle from *now* rather than wherever a
+    // previous half-time session left off, so re-engaging it always
+    // plays the very next beat instead of possibly muting it.
+    this.halfTimeParity = 0;
+  }
+
+  getFeel(): FeelMultiplier {
+    return this.feel;
+  }
+
   start(bpm: number, startAtPerfSec: number, beatsPerBarOrOptions: number | MetronomeStartOptions = {}): void {
     this.stop();
 
@@ -96,6 +122,9 @@ export class MetronomeEngine {
     this.customAccentBeats = options.customAccentBeats ?? [];
     this.soundKit = options.soundKit ?? 'digital';
     this.subdivisionTicks = subdivisionTicksPerBeat(options.subdivision ?? 'none');
+    this.feel = options.feel ?? 1;
+    this.halfTimeParity = 0;
+    this.currentTickMuted = false;
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
     this.ramp = options.ramp ?? null;
@@ -156,11 +185,15 @@ export class MetronomeEngine {
           onFinished?.();
           return;
         }
+        const { mute, nextParity } = stepHalfTimeParity(this.halfTimeParity, this.feel);
+        this.currentTickMuted = mute;
+        this.halfTimeParity = nextParity;
       }
 
       const bpmForThisBeat = this.bpmForClickIndex(this.nextClickIndex);
+      const effectiveTicks = effectiveTicksPerBeat(this.subdivisionTicks, this.feel);
       const audioTime = this.nextClickTimePerfSec + this.perfToAudioOffset;
-      if (audioTime >= this.audioContext.currentTime) {
+      if (audioTime >= this.audioContext.currentTime && !this.currentTickMuted) {
         if (isMainBeat) {
           const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
           const sound = resolveClickSound(beatInBar, {
@@ -175,11 +208,11 @@ export class MetronomeEngine {
       }
 
       this.nextSubTick += 1;
-      if (this.nextSubTick >= this.subdivisionTicks) {
+      if (this.nextSubTick >= effectiveTicks) {
         this.nextSubTick = 0;
         this.nextClickIndex += 1;
       }
-      this.nextClickTimePerfSec += 60 / bpmForThisBeat / this.subdivisionTicks;
+      this.nextClickTimePerfSec += 60 / bpmForThisBeat / effectiveTicks;
     }
   }
 

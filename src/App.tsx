@@ -46,6 +46,8 @@ function App() {
     setManualBpm,
     halveManualBpm,
     doubleManualBpm,
+    feel,
+    setFeel,
     playManualClick,
     presets,
     savePresetAsNew,
@@ -193,6 +195,7 @@ function App() {
         {metronomeActive && (
           <p className="notice notice--metronome">
             Click track at {clickTrackBpm !== null ? clickTrackBpm.toFixed(1) : '--'} BPM
+            {feel !== 1 && (feel === 2 ? ' (double-time feel)' : ' (half-time feel)')}
             {metronomePosition && (
               <>
                 {' · Bar '}
@@ -265,7 +268,14 @@ function App() {
 
         <div className="manual-metronome">
           <div className="manual-metronome__bpm-row">
-            <button type="button" className="pill-button" onClick={halveManualBpm} aria-label="Halve tempo">
+            <button
+              type="button"
+              className="pill-button"
+              onClick={metronomeActive ? () => setFeel(feel === 0.5 ? 1 : 0.5) : halveManualBpm}
+              aria-label={metronomeActive ? 'Toggle half-time feel' : 'Halve tempo'}
+              aria-pressed={metronomeActive ? feel === 0.5 : undefined}
+              data-active={metronomeActive && feel === 0.5}
+            >
               ½×
             </button>
             <div className="manual-metronome__bpm">
@@ -279,10 +289,24 @@ function App() {
               />
               <span aria-hidden="true">BPM</span>
             </div>
-            <button type="button" className="pill-button" onClick={doubleManualBpm} aria-label="Double tempo">
+            <button
+              type="button"
+              className="pill-button"
+              onClick={metronomeActive ? () => setFeel(feel === 2 ? 1 : 2) : doubleManualBpm}
+              aria-label={metronomeActive ? 'Toggle double-time feel' : 'Double tempo'}
+              aria-pressed={metronomeActive ? feel === 2 : undefined}
+              data-active={metronomeActive && feel === 2}
+            >
               2×
             </button>
           </div>
+          {metronomeActive && (
+            <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
+              {feel === 1
+                ? 'Tap ½× or 2× to change feel live, without stopping.'
+                : `${feel === 2 ? 'Double' : 'Half'}-time feel active — same tempo underneath.`}
+            </p>
+          )}
           <input
             type="range"
             aria-label="Manual tempo slider"

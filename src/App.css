@@ -445,6 +445,12 @@ body {
   transform: scale(0.96);
 }
 
+.pill-button[data-active='true'] {
+  background: var(--accent);
+  color: #1a1200;
+  border-color: var(--accent);
+}
+
 .big-button--manual-click {
   background: var(--secondary);
   color: #04211f;
@@ -711,4 +717,50 @@ body {
   font-size: 14px;
   padding: 10px;
   cursor: pointer;
+}
+
+/* Phone landscape: short, wide viewport -- reflow the main content into two
+   columns instead of one long vertical stack, so it's readable and usable
+   mounted sideways near a kit without constant scrolling. Reacts
+   automatically to actual device rotation; no JS involved. The max-height
+   guards against triggering this on landscape tablets/desktop, which
+   already have plenty of vertical room and don't need the compact treatment. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .stage__header {
+    padding: 10px 20px 6px;
+  }
+
+  .stage__main {
+    display: block;
+    columns: 2;
+    column-gap: 28px;
+    padding: 6px 24px 16px;
+  }
+
+  .stage__main > * {
+    break-inside: avoid;
+    margin: 0 auto 14px;
+  }
+
+  .bpm-readout__value {
+    font-size: min(20vh, 104px);
+  }
+
+  .bpm-readout__unit {
+    font-size: 16px;
+  }
+
+  .manual-metronome,
+  .setlist,
+  .meter-row {
+    max-width: 100%;
+  }
+
+  .stage__footer {
+    padding: 2px 20px 8px;
+  }
+
+  .privacy-note {
+    font-size: 10px;
+  }
 }

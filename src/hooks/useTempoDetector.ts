@@ -10,6 +10,7 @@ import {
 } from '../lib/metronomeSchedule';
 import { parseCustomAccentBeats, type AccentMode, type SoundKit, type Subdivision } from '../lib/clickPattern';
 import type { TempoRampConfig } from '../lib/tempoRamp';
+import type { FeelMultiplier } from '../lib/feel';
 import { createTapTempoState, registerTap, type TapTempoState } from '../lib/tapTempo';
 import { parseStoredSettings, serializeSettings } from '../lib/settingsStorage';
 import { moveItem } from '../lib/layoutOrder';
@@ -48,6 +49,15 @@ export interface DetectorSettings {
   rampTargetBpm: number;
   rampBpmStep: number;
   rampBarsPerStep: number;
+  /**
+   * While a click track plays and the mic is still listening, continuously
+   * nudge the click's tempo toward whatever's detected. Off by default:
+   * if the device's speaker output reaches its own mic at all (common on
+   * a phone), the click can start hearing itself and reinforcing that,
+   * compounding into a runaway tempo over time. Safe with headphones or
+   * an isolated mic setup, but not something to risk on by default.
+   */
+  liveTempoTrackingEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: DetectorSettings = {
@@ -69,6 +79,7 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   rampTargetBpm: 140,
   rampBpmStep: 5,
   rampBarsPerStep: 4,
+  liveTempoTrackingEnabled: false,
 };
 
 export interface SongPresetData {
@@ -115,6 +126,7 @@ export function useTempoDetector() {
   const [metronomeActive, setMetronomeActive] = useState(false);
   const [metronomeBpm, setMetronomeBpm] = useState<number | null>(null);
   const [metronomePosition, setMetronomePosition] = useState<MetronomePosition | null>(null);
+  const [feel, setFeelState] = useState<FeelMultiplier>(1);
   const [manualBpm, setManualBpmState] = useState(120);
 
   const engineRef = useRef<LiveTempoEngine | null>(null);
@@ -158,6 +170,7 @@ export function useTempoDetector() {
     barCountdownRef.current = createBarCountdownState();
     setMetronomeActive(false);
     setMetronomeBpm(null);
+    setFeelState(1);
     stopPositionPoll();
   }, [stopPositionPoll]);
 
@@ -270,6 +283,7 @@ export function useTempoDetector() {
           });
           setMetronomeActive(true);
           setMetronomeBpm(result.metronomeBpm);
+          setFeelState(1);
           startPositionPoll();
         }
 
@@ -278,7 +292,9 @@ export function useTempoDetector() {
         // detected instead of leaving it running open-loop forever -- this
         // is what lets it track a live tempo that drifts slightly over the
         // course of a song rather than locking in one number for good.
+        // Opt-in only: see liveTempoTrackingEnabled's doc comment for why.
         if (
+          cfg.liveTempoTrackingEnabled &&
           metronomeEngineRef.current?.isRunning() &&
           state.continuity.displayedBpm !== null &&
           state.continuity.status !== 'finding'
@@ -381,13 +397,21 @@ export function useTempoDetector() {
       onFinished: () => {
         setMetronomeActive(false);
         setMetronomeBpm(null);
+        setFeelState(1);
         stopPositionPoll();
       },
     });
     setMetronomeActive(true);
     setMetronomeBpm(manualBpm);
+    setFeelState(1);
     startPositionPoll();
   }, [manualBpm, startPositionPoll, stopPositionPoll]);
+
+  /** Live-toggles half/double-time feel on the currently running click track, without stopping or restarting it. */
+  const setFeel = useCallback((next: FeelMultiplier) => {
+    metronomeEngineRef.current?.setFeel(next);
+    setFeelState(next);
+  }, []);
 
   const currentPresetData = useCallback(
     (): SongPresetData => ({
@@ -461,6 +485,8 @@ export function useTempoDetector() {
     halveManualBpm,
     doubleManualBpm,
     playManualClick,
+    feel,
+    setFeel,
     presets,
     savePresetAsNew,
     overwritePreset,

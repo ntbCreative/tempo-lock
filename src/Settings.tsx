@@ -347,6 +347,23 @@ function PracticeSection({ settings, updateSettings }: SettingsProps) {
           </div>
         </>
       )}
+
+      <div className="control">
+        <div className="control__label-row">
+          <label htmlFor="live-tracking">Live tempo tracking</label>
+          <input
+            id="live-tracking"
+            type="checkbox"
+            checked={settings.liveTempoTrackingEnabled}
+            onChange={(e) => updateSettings({ liveTempoTrackingEnabled: e.target.checked })}
+          />
+        </div>
+        <p className="settings-note">
+          While a click plays and the mic is still listening, gently track ongoing drift in the detected tempo.
+          Off by default: if your speaker output reaches its own mic, the click can start hearing itself and
+          drifting on its own. Safe to enable with headphones or an isolated mic.
+        </p>
+      </div>
     </div>
   );
 }

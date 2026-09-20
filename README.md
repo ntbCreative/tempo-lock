@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (162 tests as of this build).
+Run `npm run test` for the full suite (170 tests as of this build).
 
 ## Known real-world limitations
 
@@ -197,6 +197,27 @@ real kit has not been measured. In particular:
   that tempo instead — this one is an approximate visual reference, not
   phase-locked to your actual hits, since there's no click audio to sync
   it to.
+- **Landscape layout**: rotating the phone on its side automatically
+  reflows the main screen into two columns instead of one tall vertical
+  stack, via a CSS orientation media query — no JavaScript, no manual
+  toggle, just reacts to the actual device rotation. Scoped to short
+  viewports (`max-height: 500px`) so it only kicks in for phones, not
+  landscape tablets/desktop which already have room to spare.
+- **Live feel toggle**: while a click track is playing (auto-started or
+  manual), ½× and 2× now toggle half-time/double-time feel in real time
+  instead of only adjusting the pre-play dial — same underlying tempo and
+  bar position, just fewer or more audible clicks, with no restart or
+  phase jump. 2× inserts an extra evenly-spaced tick per beat; ½× mutes
+  every other beat. Independent of the static Subdivision setting.
+- **Live tempo tracking is now opt-in, off by default (this build)**: it
+  was confirmed to cause exactly the failure it was trying to prevent —
+  a click starting accurate and then drifting/going haywire after
+  auto-start. The mechanism (continuously nudging the click's tempo
+  toward whatever the mic detects) can't distinguish real external input
+  from the click hearing its own audio if the device's speaker reaches
+  its own mic, and that feedback compounds over time. Now off by default;
+  Settings → Practice → "Live tempo tracking" to opt in if you're on
+  headphones or an isolated mic setup where that risk doesn't apply.
 - **Confidence calibration fix (this build)**: the tempo estimator's
   confidence used to be the winning candidate's *share* of vote weight
   across all harmonic candidates (fundamental, half-time, double-time,
