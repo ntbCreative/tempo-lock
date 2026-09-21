@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
+import { doubleFeel, halveFeel } from './lib/feel';
 import Settings from './Settings';
 import './App.css';
+
+/** Formats a feel multiplier for display: 2 -> "2×", 0.5 -> "½×", 0.25 -> "¼×", 0.125 -> "⅛×". */
+function formatFeel(feel: number): string {
+  if (feel === 1) return '1×';
+  if (feel < 1) {
+    const denominator = Math.round(1 / feel);
+    const fractionGlyphs: Record<number, string> = { 2: '½', 4: '¼', 8: '⅛' };
+    return `${fractionGlyphs[denominator] ?? `1/${denominator}`}×`;
+  }
+  return `${feel}×`;
+}
 
 function statusLabel(status: string, continuityStatus: string): string {
   switch (status) {
@@ -197,7 +209,7 @@ function App() {
         {metronomeActive && (
           <p className="notice notice--metronome">
             Click track at {clickTrackBpm !== null ? clickTrackBpm.toFixed(1) : '--'} BPM
-            {feel !== 1 && (feel === 2 ? ' (double-time feel)' : ' (half-time feel)')}
+            {feel !== 1 && ` (${formatFeel(feel)} feel)`}
             {metronomePosition && (
               <>
                 {' · Bar '}
@@ -273,10 +285,10 @@ function App() {
             <button
               type="button"
               className="pill-button"
-              onClick={metronomeActive ? () => setFeel(feel === 0.5 ? 1 : 0.5) : halveManualBpm}
-              aria-label={metronomeActive ? 'Toggle half-time feel' : 'Halve tempo'}
-              aria-pressed={metronomeActive ? feel === 0.5 : undefined}
-              data-active={metronomeActive && feel === 0.5}
+              onClick={metronomeActive ? () => setFeel(halveFeel(feel)) : halveManualBpm}
+              aria-label={metronomeActive ? 'Halve click rate' : 'Halve tempo'}
+              aria-pressed={metronomeActive ? feel < 1 : undefined}
+              data-active={metronomeActive && feel < 1}
             >
               ½×
             </button>
@@ -294,10 +306,10 @@ function App() {
             <button
               type="button"
               className="pill-button"
-              onClick={metronomeActive ? () => setFeel(feel === 2 ? 1 : 2) : doubleManualBpm}
-              aria-label={metronomeActive ? 'Toggle double-time feel' : 'Double tempo'}
-              aria-pressed={metronomeActive ? feel === 2 : undefined}
-              data-active={metronomeActive && feel === 2}
+              onClick={metronomeActive ? () => setFeel(doubleFeel(feel)) : doubleManualBpm}
+              aria-label={metronomeActive ? 'Double click rate' : 'Double tempo'}
+              aria-pressed={metronomeActive ? feel > 1 : undefined}
+              data-active={metronomeActive && feel > 1}
             >
               2×
             </button>
@@ -305,8 +317,8 @@ function App() {
           {metronomeActive && (
             <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
               {feel === 1
-                ? 'Tap ½× or 2× to change feel live, without stopping.'
-                : `${feel === 2 ? 'Double' : 'Half'}-time feel active — same tempo underneath.`}
+                ? 'Tap ½× or 2× to change feel live — each press doubles or halves again.'
+                : `${formatFeel(feel)} feel active — same tempo underneath.`}
             </p>
           )}
           <input

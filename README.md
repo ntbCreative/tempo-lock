@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (172 tests as of this build).
+Run `npm run test` for the full suite (181 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,15 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Stacking feel toggle (this build)**: ½× and 2× now stack instead of
+  being a fixed 3-state toggle — each press of 2× doubles the click rate
+  again (1× → 2× → 4× → 8×), each press of ½× halves it again
+  (1× → ½× → ¼× → ⅛×), clamped at those endpoints since further is no
+  longer musically meaningful. Still live, still no restart or phase
+  jump. Faster-than-1× keeps inserting extra evenly-spaced ticks (2× = 2
+  ticks/beat, 4× = 4, 8× = 8); slower-than-1× mutes all but one beat out
+  of every N-beat cycle (½× = every other beat, ¼× = one in four, ⅛× = one
+  in eight). Covered by 17 tests in `feel.test.ts`.
 - **Click volume**: Settings → Sounds → Click volume, applies live even
   while a click is already playing (no restart). Also raised the base
   gain of every synthesized sound (roughly 1.4-1.8x, cowbell less to

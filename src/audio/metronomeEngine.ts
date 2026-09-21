@@ -10,7 +10,7 @@ import {
   type Subdivision,
 } from '../lib/clickPattern';
 import { bpmForBar, clickIndexAtElapsedTime, type TempoRampConfig } from '../lib/tempoRamp';
-import { effectiveTicksPerBeat, stepHalfTimeParity, type FeelMultiplier } from '../lib/feel';
+import { effectiveTicksPerBeat, stepBeatCycle, DEFAULT_FEEL, type FeelMultiplier } from '../lib/feel';
 
 const LOOKAHEAD_SEC = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
@@ -49,8 +49,8 @@ export class MetronomeEngine {
   private nextClickTimePerfSec = 0;
   private nextSubTick = 0;
   private subdivisionTicks = 1;
-  private feel: FeelMultiplier = 1;
-  private halfTimeParity: 0 | 1 = 0;
+  private feel: FeelMultiplier = DEFAULT_FEEL;
+  private beatCycleCounter = 0;
   private currentTickMuted = false;
   private bpm = 120;
   private beatsPerBar = 4;
@@ -96,7 +96,7 @@ export class MetronomeEngine {
     // Restart the half-time skip cycle from *now* rather than wherever a
     // previous half-time session left off, so re-engaging it always
     // plays the very next beat instead of possibly muting it.
-    this.halfTimeParity = 0;
+    this.beatCycleCounter = 0;
   }
 
   getFeel(): FeelMultiplier {
@@ -128,7 +128,7 @@ export class MetronomeEngine {
     this.soundKit = options.soundKit ?? 'digital';
     this.subdivisionTicks = subdivisionTicksPerBeat(options.subdivision ?? 'none');
     this.feel = options.feel ?? 1;
-    this.halfTimeParity = 0;
+    this.beatCycleCounter = 0;
     this.currentTickMuted = false;
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
@@ -190,9 +190,9 @@ export class MetronomeEngine {
           onFinished?.();
           return;
         }
-        const { mute, nextParity } = stepHalfTimeParity(this.halfTimeParity, this.feel);
+        const { mute, nextCounter } = stepBeatCycle(this.beatCycleCounter, this.feel);
         this.currentTickMuted = mute;
-        this.halfTimeParity = nextParity;
+        this.beatCycleCounter = nextCounter;
       }
 
       const bpmForThisBeat = this.bpmForClickIndex(this.nextClickIndex);
