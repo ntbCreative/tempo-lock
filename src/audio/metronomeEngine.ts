@@ -4,6 +4,7 @@ import {
   beatIndexInBar as computeBeatIndexInBar,
   clapVoiceForKit,
   subdivisionTicksPerBeat,
+  resolveEffectiveAccentMode,
   type AccentMode,
   type ClickSound,
   type SoundKit,
@@ -22,6 +23,8 @@ function nowSeconds(): number {
 export interface MetronomeStartOptions {
   beatsPerBar?: number;
   accentMode?: AccentMode;
+  /** For 'backbeat' (2 & 4 clap) mode only: play this many bars of a straight, downbeat-accented count-in before the real backbeat pattern starts. */
+  backbeatCountInBars?: number;
   customAccentBeats?: number[];
   soundKit?: SoundKit;
   /** Extra evenly-spaced ticks between the main beat clicks; 'none' (default) plays just the beat itself. */
@@ -55,6 +58,7 @@ export class MetronomeEngine {
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
+  private backbeatCountInBars = 0;
   private customAccentBeats: number[] = [];
   private soundKit: SoundKit = 'digital';
   private totalBars = 0;
@@ -124,6 +128,7 @@ export class MetronomeEngine {
     this.bpm = bpm;
     this.beatsPerBar = options.beatsPerBar ?? 4;
     this.accentMode = options.accentMode ?? 'first';
+    this.backbeatCountInBars = options.backbeatCountInBars ?? 0;
     this.customAccentBeats = options.customAccentBeats ?? [];
     this.soundKit = options.soundKit ?? 'digital';
     this.subdivisionTicks = subdivisionTicksPerBeat(options.subdivision ?? 'none');
@@ -201,8 +206,10 @@ export class MetronomeEngine {
       if (audioTime >= this.audioContext.currentTime && !this.currentTickMuted) {
         if (isMainBeat) {
           const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
+          const barIndex = Math.floor(this.nextClickIndex / this.beatsPerBar);
+          const effectiveAccentMode = resolveEffectiveAccentMode(this.accentMode, barIndex, this.backbeatCountInBars);
           const sound = resolveClickSound(beatInBar, {
-            accentMode: this.accentMode,
+            accentMode: effectiveAccentMode,
             beatsPerBar: this.beatsPerBar,
             customAccentBeats: this.customAccentBeats,
           });
@@ -226,7 +233,7 @@ export class MetronomeEngine {
 
     if (sound === 'clap') {
       if (clapVoiceForKit(this.soundKit) === 'digital-clap') {
-        this.playNoiseBurst(audioTime, { freq: 1800, q: 0.9, peak: 0.7, duration: 0.07 });
+        this.playNoiseBurst(audioTime, { freq: 1800, q: 0.9, peak: 0.95, duration: 0.07 });
       } else {
         this.playKitVoice(audioTime, true);
       }
@@ -255,6 +262,18 @@ export class MetronomeEngine {
         break;
       case 'clave':
         this.playClave(audioTime, accent);
+        break;
+      case 'kick':
+        this.playKick(audioTime, accent);
+        break;
+      case 'snare':
+        this.playSnare(audioTime, accent);
+        break;
+      case 'shaker':
+        this.playShaker(audioTime, accent);
+        break;
+      case 'triangle':
+        this.playTriangle(audioTime, accent);
         break;
     }
   }
@@ -312,7 +331,7 @@ export class MetronomeEngine {
   }
 
   private playDigital(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, { freq: accent ? 1500 : 1000, peak: accent ? 0.55 : 0.38, duration: 0.045 });
+    this.playTone(audioTime, { freq: accent ? 1500 : 1000, peak: accent ? 0.95 : 0.75, duration: 0.045 });
   }
 
   private playWoodblock(audioTime: number, accent: boolean): void {
@@ -320,22 +339,29 @@ export class MetronomeEngine {
       type: 'triangle',
       freq: accent ? 1300 : 1000,
       pitchDropTo: accent ? 700 : 550,
-      peak: accent ? 0.6 : 0.42,
+      peak: accent ? 0.95 : 0.75,
       duration: 0.05,
     });
   }
 
+  // Rimshot layers noise + a tone simultaneously; each layer is capped
+  // lower than a single-voice sound so their sum can't push the final
+  // output past 1.0 and hard-clip (louder-but-distorted is a worse
+  // outcome than "loud and clean").
   private playRimshot(audioTime: number, accent: boolean): void {
-    this.playNoiseBurst(audioTime, { freq: 3200, q: 1.1, peak: accent ? 0.65 : 0.45, duration: 0.03 });
-    this.playTone(audioTime, { type: 'triangle', freq: accent ? 2200 : 1800, peak: accent ? 0.3 : 0.18, duration: 0.02 });
+    this.playNoiseBurst(audioTime, { freq: 3200, q: 1.1, peak: accent ? 0.6 : 0.48, duration: 0.03 });
+    this.playTone(audioTime, { type: 'triangle', freq: accent ? 2200 : 1800, peak: accent ? 0.32 : 0.22, duration: 0.02 });
   }
 
+  // Two simultaneous square-wave oscillators can sum to roughly double
+  // amplitude at their peaks, so this kit's ceiling is capped well below
+  // the single-voice max for the same reason as rimshot above.
   private playCowbell(audioTime: number, accent: boolean): void {
     const ctx = this.audioContext;
     if (!ctx) return;
 
     const duration = accent ? 0.09 : 0.06;
-    const peak = (accent ? 0.42 : 0.28) * this.volumeScale;
+    const peak = (accent ? 0.5 : 0.36) * this.volumeScale;
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = 2500;
@@ -363,19 +389,73 @@ export class MetronomeEngine {
     this.playNoiseBurst(audioTime, {
       freq: 7000,
       q: 0.7,
-      peak: accent ? 0.48 : 0.3,
+      peak: accent ? 0.9 : 0.65,
       duration: accent ? 0.035 : 0.02,
       highpass: true,
     });
   }
 
   private playClave(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.58 : 0.4, duration: 0.02 });
+    this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.95 : 0.75, duration: 0.02 });
+  }
+
+  /** A low sine thump with a fast downward pitch sweep -- classic simple kick-drum synthesis. */
+  private playKick(audioTime: number, accent: boolean): void {
+    this.playTone(audioTime, {
+      freq: accent ? 165 : 140,
+      pitchDropTo: accent ? 48 : 42,
+      peak: accent ? 0.95 : 0.75,
+      duration: accent ? 0.13 : 0.1,
+    });
+  }
+
+  // Noise (the "crack") + a low tone (the "body") layered together, same
+  // headroom reasoning as rimshot above.
+  private playSnare(audioTime: number, accent: boolean): void {
+    this.playNoiseBurst(audioTime, { freq: 2200, q: 0.8, peak: accent ? 0.6 : 0.46, duration: accent ? 0.09 : 0.07 });
+    this.playTone(audioTime, { freq: accent ? 200 : 180, peak: accent ? 0.3 : 0.2, duration: 0.03 });
+  }
+
+  /** A soft, slightly longer high-passed noise burst -- gentler attack than the hi-hat, more of a sustained "shh" than a sharp tick. */
+  private playShaker(audioTime: number, accent: boolean): void {
+    this.playNoiseBurst(audioTime, {
+      freq: 6000,
+      q: 0.5,
+      peak: accent ? 0.85 : 0.6,
+      duration: accent ? 0.08 : 0.06,
+      highpass: true,
+    });
+  }
+
+  // Two closely-detuned high sine oscillators for a shimmering ring, held
+  // simultaneously -- capped for the same two-source headroom reason as
+  // cowbell above, with a longer decay than the other ticks for a real
+  // "ring" rather than a short blip.
+  private playTriangle(audioTime: number, accent: boolean): void {
+    const ctx = this.audioContext;
+    if (!ctx) return;
+
+    const duration = accent ? 0.22 : 0.16;
+    const peak = (accent ? 0.5 : 0.36) * this.volumeScale;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, audioTime);
+    gain.gain.linearRampToValueAtTime(peak, audioTime + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + duration);
+    gain.connect(ctx.destination);
+
+    for (const freq of [2800, 2850]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      osc.start(audioTime);
+      osc.stop(audioTime + duration + 0.01);
+    }
   }
 
   /** A quiet, plain tick for subdivision clicks -- deliberately simple and consistent regardless of the chosen sound kit, so it's clearly distinguishable from the main beat. */
   private playSubdivisionTick(audioTime: number): void {
-    this.playTone(audioTime, { freq: 900, peak: 0.22, duration: 0.02 });
+    this.playTone(audioTime, { freq: 900, peak: 0.35, duration: 0.02 });
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {

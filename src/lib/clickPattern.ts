@@ -62,7 +62,17 @@ export function beatIndexInBar(clickIndex: number, beatsPerBar: number): number 
  * in-browser (oscillators/filtered noise) -- no sample playback, so no
  * licensing concerns and no asset loading.
  */
-export type SoundKit = 'digital' | 'woodblock' | 'rimshot' | 'cowbell' | 'hihat' | 'clave';
+export type SoundKit =
+  | 'digital'
+  | 'woodblock'
+  | 'rimshot'
+  | 'cowbell'
+  | 'hihat'
+  | 'clave'
+  | 'kick'
+  | 'snare'
+  | 'shaker'
+  | 'triangle';
 
 export const SOUND_KITS: { label: string; value: SoundKit }[] = [
   { label: 'Digital', value: 'digital' },
@@ -71,6 +81,10 @@ export const SOUND_KITS: { label: string; value: SoundKit }[] = [
   { label: 'Cowbell', value: 'cowbell' },
   { label: 'Hi-Hat', value: 'hihat' },
   { label: 'Clave', value: 'clave' },
+  { label: 'Kick', value: 'kick' },
+  { label: 'Snare', value: 'snare' },
+  { label: 'Shaker', value: 'shaker' },
+  { label: 'Triangle', value: 'triangle' },
 ];
 
 /**
@@ -124,4 +138,20 @@ export function subdivisionTicksPerBeat(subdivision: Subdivision): number {
     default:
       return 1;
   }
+}
+
+/**
+ * A cold "2 & 4 clap" click can be disorienting to start on -- there's
+ * nothing on the downbeat to feel the pulse against. This resolves which
+ * accent mode a given bar should actually use: a straight, downbeat-
+ * accented quarter-note count-in ('first') for the first `countInBars`
+ * bars, then the real configured mode afterward -- like a drummer
+ * counting "1-2-3-4" before dropping into the groove. A no-op (always
+ * returns `configuredMode` unchanged) for any mode other than 'backbeat',
+ * or when countInBars is 0, since this specific disorientation problem
+ * only applies to a mode with silent downbeats.
+ */
+export function resolveEffectiveAccentMode(configuredMode: AccentMode, barIndex: number, countInBars: number): AccentMode {
+  if (configuredMode !== 'backbeat' || countInBars <= 0) return configuredMode;
+  return barIndex < countInBars ? 'first' : configuredMode;
 }

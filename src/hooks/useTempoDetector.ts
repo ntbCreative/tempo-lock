@@ -39,6 +39,8 @@ export interface DetectorSettings {
   beatsPerBar: number;
   accentMode: AccentMode;
   customAccentBeatsInput: string;
+  /** For 'backbeat' (2 & 4 clap) mode only: a straight quarter-note count-in for this many bars before the real backbeat pattern starts. 0 disables it. */
+  backbeatCountInBars: 0 | 1 | 2;
   clickTrackLengthBars: number;
   soundKit: SoundKit;
   /** Extra evenly-spaced ticks between the main beat clicks. */
@@ -72,6 +74,7 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   beatsPerBar: 4,
   accentMode: 'first',
   customAccentBeatsInput: '1',
+  backbeatCountInBars: 0,
   clickTrackLengthBars: 0,
   soundKit: 'digital',
   subdivision: 'none',
@@ -90,6 +93,7 @@ export interface SongPresetData {
   beatsPerBar: number;
   accentMode: AccentMode;
   customAccentBeatsInput: string;
+  backbeatCountInBars: 0 | 1 | 2;
   soundKit: SoundKit;
   subdivision: Subdivision;
   clickTrackLengthBars: number;
@@ -268,6 +272,7 @@ export function useTempoDetector() {
             countInEngineRef.current.start(result.state.lockStartBpm, result.state.lockStartTimeSec, {
               beatsPerBar: cfg.beatsPerBar,
               accentMode: cfg.accentMode,
+              backbeatCountInBars: cfg.backbeatCountInBars,
               customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
               soundKit: cfg.soundKit,
               subdivision: cfg.subdivision,
@@ -285,6 +290,7 @@ export function useTempoDetector() {
           metronomeEngineRef.current.start(result.metronomeBpm, result.metronomeStartTimeSec, {
             beatsPerBar: cfg.beatsPerBar,
             accentMode: cfg.accentMode,
+            backbeatCountInBars: cfg.backbeatCountInBars,
             customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
             soundKit: cfg.soundKit,
             subdivision: cfg.subdivision,
@@ -403,6 +409,7 @@ export function useTempoDetector() {
     metronomeEngineRef.current.start(manualBpm, performance.now() / 1000, {
       beatsPerBar: cfg.beatsPerBar,
       accentMode: cfg.accentMode,
+      backbeatCountInBars: cfg.backbeatCountInBars,
       customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
       soundKit: cfg.soundKit,
       subdivision: cfg.subdivision,
@@ -434,6 +441,7 @@ export function useTempoDetector() {
       beatsPerBar: settingsRef.current.beatsPerBar,
       accentMode: settingsRef.current.accentMode,
       customAccentBeatsInput: settingsRef.current.customAccentBeatsInput,
+      backbeatCountInBars: settingsRef.current.backbeatCountInBars,
       soundKit: settingsRef.current.soundKit,
       subdivision: settingsRef.current.subdivision,
       clickTrackLengthBars: settingsRef.current.clickTrackLengthBars,
@@ -469,6 +477,7 @@ export function useTempoDetector() {
         beatsPerBar: preset.data.beatsPerBar,
         accentMode: preset.data.accentMode,
         customAccentBeatsInput: preset.data.customAccentBeatsInput,
+        backbeatCountInBars: preset.data.backbeatCountInBars,
         soundKit: preset.data.soundKit,
         subdivision: preset.data.subdivision,
         clickTrackLengthBars: preset.data.clickTrackLengthBars,

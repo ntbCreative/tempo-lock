@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (181 tests as of this build).
+Run `npm run test` for the full suite (186 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,28 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **4 new sound kits + maximum gain (this build)**: added Kick (low
+  pitch-swept thump), Snare (noise crack + body tone), Shaker (soft,
+  sustained noise, gentler than the hi-hat), and Triangle (two detuned
+  high sines for a real shimmering ring, longer decay than the other
+  ticks) — 10 kits total now. Every voice's gain was pushed to the
+  actual safe ceiling: single-source sounds (Digital, Woodblock, Hi-Hat,
+  Clave, Kick, Shaker) sit right at the edge of clipping (~0.9-0.95 peak).
+  Sounds that layer multiple simultaneous sources — Rimshot and Snare
+  (noise + tone), Cowbell and Triangle (two oscillators) — are capped
+  lower on purpose: those layers sum together at the final output, and
+  Web Audio hard-clips (distorts) past ±1.0 rather than normalizing, so
+  pushing them to the same literal ceiling as a single-source sound would
+  make them louder *and* distorted, not just louder. That's a genuine
+  technical ceiling, not an arbitrary conservative choice.
+- **2 & 4 clap count-in (this build)**: a cold backbeat-only click has
+  nothing on the downbeat to feel the pulse against, which can be
+  disorienting to start on. Settings → Click Track → "Count-in before
+  the clap starts" (only shown when Click mode is "2 & 4 clap") adds 1
+  or 2 bars of a straight, downbeat-accented quarter-note count-in —
+  like counting off "1-2-3-4" — before the real backbeat pattern kicks
+  in. Applies to both the mic-triggered auto-start and a manually-started
+  click. Covered by 5 new tests in `clickPattern.test.ts`.
 - **Stacking feel toggle (this build)**: ½× and 2× now stack instead of
   being a fixed 3-state toggle — each press of 2× doubles the click rate
   again (1× → 2× → 4× → 8×), each press of ½× halves it again

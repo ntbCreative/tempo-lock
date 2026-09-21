@@ -171,6 +171,27 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
         </div>
       )}
 
+      {settings.accentMode === 'backbeat' && (
+        <div className="control">
+          <div className="control__label-row">
+            <label htmlFor="backbeat-count-in">Count-in before the clap starts</label>
+          </div>
+          <select
+            id="backbeat-count-in"
+            value={settings.backbeatCountInBars}
+            onChange={(e) => updateSettings({ backbeatCountInBars: Number(e.target.value) as 0 | 1 | 2 })}
+          >
+            <option value={0}>Off</option>
+            <option value={1}>1 bar of straight quarters</option>
+            <option value={2}>2 bars of straight quarters</option>
+          </select>
+          <p className="settings-note">
+            A cold 2 & 4 clap has nothing on the downbeat to feel the pulse against. This plays a straight,
+            accented quarter-note count-in first, like counting off "1-2-3-4" before the backbeat pattern starts.
+          </p>
+        </div>
+      )}
+
       <div className="control">
         <div className="control__label-row">
           <label htmlFor="metronome-bars">Auto-start after</label>

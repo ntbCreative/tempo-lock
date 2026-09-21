@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats, clapVoiceForKit, subdivisionTicksPerBeat } from './clickPattern';
+import { resolveClickSound, beatIndexInBar, parseCustomAccentBeats, clapVoiceForKit, subdivisionTicksPerBeat, resolveEffectiveAccentMode } from './clickPattern';
 
 describe('clickPattern: accent modes', () => {
   it('"all" plays every beat as a plain click with no accent', () => {
@@ -85,6 +85,10 @@ describe('clickPattern: clapVoiceForKit', () => {
     expect(clapVoiceForKit('cowbell')).toBe('kit-accent');
     expect(clapVoiceForKit('hihat')).toBe('kit-accent');
     expect(clapVoiceForKit('clave')).toBe('kit-accent');
+    expect(clapVoiceForKit('kick')).toBe('kit-accent');
+    expect(clapVoiceForKit('snare')).toBe('kit-accent');
+    expect(clapVoiceForKit('shaker')).toBe('kit-accent');
+    expect(clapVoiceForKit('triangle')).toBe('kit-accent');
   });
 });
 
@@ -99,5 +103,32 @@ describe('clickPattern: subdivisionTicksPerBeat', () => {
 
   it('is 3 ticks per beat for "triplet"', () => {
     expect(subdivisionTicksPerBeat('triplet')).toBe(3);
+  });
+});
+
+describe('clickPattern: resolveEffectiveAccentMode', () => {
+  it('uses a straight downbeat-accented count-in for the first N bars of backbeat mode', () => {
+    expect(resolveEffectiveAccentMode('backbeat', 0, 2)).toBe('first');
+    expect(resolveEffectiveAccentMode('backbeat', 1, 2)).toBe('first');
+  });
+
+  it('switches to the real backbeat pattern once the count-in bars are done', () => {
+    expect(resolveEffectiveAccentMode('backbeat', 2, 2)).toBe('backbeat');
+    expect(resolveEffectiveAccentMode('backbeat', 5, 2)).toBe('backbeat');
+  });
+
+  it('supports a 1-bar count-in', () => {
+    expect(resolveEffectiveAccentMode('backbeat', 0, 1)).toBe('first');
+    expect(resolveEffectiveAccentMode('backbeat', 1, 1)).toBe('backbeat');
+  });
+
+  it('is a no-op when countInBars is 0', () => {
+    expect(resolveEffectiveAccentMode('backbeat', 0, 0)).toBe('backbeat');
+  });
+
+  it('is a no-op for any mode other than backbeat, regardless of countInBars', () => {
+    expect(resolveEffectiveAccentMode('all', 0, 2)).toBe('all');
+    expect(resolveEffectiveAccentMode('first', 0, 2)).toBe('first');
+    expect(resolveEffectiveAccentMode('custom', 0, 2)).toBe('custom');
   });
 });
