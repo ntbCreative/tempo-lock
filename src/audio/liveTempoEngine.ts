@@ -113,6 +113,12 @@ export class LiveTempoEngine {
   // the most recently captured audio chunk.
   private pendingSamples: Float32Array = new Float32Array(0);
 
+  // An external reference tempo (e.g. from Tap Tempo, set just before
+  // Start Listening) used only until the detector locks onto its own --
+  // see runAnalysis()'s priorBpm computation for why this matters for
+  // resolving octave ambiguity (quarter-note vs half/double-time reads).
+  private seedPriorBpm: number | null = null;
+
   constructor(options: EngineOptions) {
     this.options = options;
     this.engineState = {
@@ -136,12 +142,20 @@ export class LiveTempoEngine {
     this.options.onUpdate(this.engineState);
   }
 
-  async start(): Promise<void> {
+  /**
+   * `seedPriorBpm`, if given, is used to resolve octave ambiguity (is this
+   * a 120 BPM quarter-note pulse or a 240 BPM one?) until the detector
+   * locks onto its own reading -- typically the value from Tap Tempo,
+   * letting you establish the intended quarter note before listening
+   * starts rather than leaving the very first read to guess blind.
+   */
+  async start(seedPriorBpm: number | null = null): Promise<void> {
     if (!isMicrophoneSupported()) {
       this.emit({ status: 'unsupported' });
       return;
     }
 
+    this.seedPriorBpm = seedPriorBpm;
     this.reset();
     this.emit({ status: 'requesting-permission' });
 
@@ -356,7 +370,7 @@ export class LiveTempoEngine {
       minBpm: this.options.minBpm,
       maxBpm: this.options.maxBpm,
     };
-    const priorBpm = this.engineState.continuity.displayedBpm;
+    const priorBpm = this.engineState.continuity.displayedBpm ?? this.seedPriorBpm;
     const relativeOnsets = this.onsetTimesSec.map((t) => t - this.onsetTimesSec[0]);
     const rawEstimate = estimateTempo(relativeOnsets, estimatorConfig, priorBpm);
 

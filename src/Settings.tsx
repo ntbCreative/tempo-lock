@@ -69,6 +69,10 @@ function DetectorSection({ settings, updateSettings }: SettingsProps) {
           value={settings.smoothing}
           onChange={(e) => updateSettings({ smoothing: Number(e.target.value) })}
         />
+        <p className="settings-note">
+          Lower: reacts fast to real tempo changes, but a single mistimed hit can make the number jump. Higher:
+          steadier, slower to react — better for a solid, locked-in pulse than loose or expressive playing.
+        </p>
       </div>
 
       <div className="control">
@@ -85,6 +89,10 @@ function DetectorSection({ settings, updateSettings }: SettingsProps) {
           value={settings.sensitivity}
           onChange={(e) => updateSettings({ sensitivity: Number(e.target.value) })}
         />
+        <p className="settings-note">
+          Lower: only strong, solid hits register — good for a firm, consistent pulse. Higher: catches quieter
+          hits too (ghost notes, grace notes), but picks up more background noise along with them.
+        </p>
       </div>
 
       <div className="control">

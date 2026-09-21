@@ -156,7 +156,32 @@ export function estimateTempo(
   const second = candidates[1];
   let chosen = top;
 
-  if (second) {
+  // If a reference tempo is available (typically from Tap Tempo, set just
+  // before listening starts) and it closely matches some candidate that's
+  // a harmonic (half/double/third) of the top one, prefer that candidate
+  // outright -- resolving octave ambiguity using an explicit reference the
+  // person gave us is stronger evidence than any purely acoustic
+  // heuristic. Scoped to genuine octave relationships (not just "closer to
+  // the prior") so this doesn't override a real, different tempo reading;
+  // it only steps in when the ambiguity is specifically a quarter-note-vs-
+  // half/double-time question.
+  if (priorBpm != null && priorBpm > 0) {
+    const priorMatch = candidates.find((c) => Math.abs(c.bpm - priorBpm) / priorBpm < 0.04);
+    if (priorMatch && priorMatch !== top) {
+      const ratio = priorMatch.bpm > top.bpm ? priorMatch.bpm / top.bpm : top.bpm / priorMatch.bpm;
+      const isOctaveOfTop = Math.abs(ratio - 2) < 0.15 || Math.abs(ratio - 3) < 0.15;
+      // Require the prior-matching candidate to have *meaningful* support of
+      // its own, not just happen to sit near the prior -- otherwise a truly
+      // dominant, clearly-correct top reading could get overridden by a
+      // barely-present minor candidate purely because of where it falls.
+      const hasMeaningfulSupport = priorMatch.score >= top.score * 0.4;
+      if (isOctaveOfTop && hasMeaningfulSupport) {
+        chosen = priorMatch;
+      }
+    }
+  }
+
+  if (chosen === top && second) {
     const scoreDiff = Math.abs(top.score - second.score);
     const ratio = top.bpm > second.bpm ? top.bpm / second.bpm : second.bpm / top.bpm;
     const isHalfOrDoubleRelation = Math.abs(ratio - 2) < 0.15;

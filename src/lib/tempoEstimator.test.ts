@@ -61,6 +61,30 @@ describe('tempoEstimator: tie-breaking between full-time and half-time candidate
     // A clean, unambiguous train should resolve to its own tempo, not half of it.
     expect(result.bpm!).toBeGreaterThan(120);
   });
+
+  it('overrides a clearly-winning candidate when a reference tempo points at its harmonic', () => {
+    // A clean 200 BPM train resolves to 200 on its own (no prior) -- this
+    // simulates real audio where the faster reading has more raw acoustic
+    // support (e.g. hi-hats at the eighth-note rate) than the true
+    // quarter-note pulse.
+    const train = clickTrain(200, 24);
+    const withoutPrior = estimateTempo(train);
+    expect(withoutPrior.bpm!).toBeCloseTo(200, 0);
+
+    // With a reference tempo at 100 (its half-time harmonic) -- e.g. tapped
+    // in via Tap Tempo before Start Listening -- the override picks 100
+    // instead, resolving the octave using the person's own reference.
+    const withPrior = estimateTempo(train, {}, 100);
+    expect(withPrior.bpm!).toBeCloseTo(100, 0);
+  });
+
+  it('ignores a reference tempo with no matching candidate at all', () => {
+    // No candidate exists anywhere near 250 for a clean 200 BPM train, so
+    // there's nothing for the override to latch onto -- falls through to
+    // ordinary resolution.
+    const result = estimateTempo(clickTrain(200, 24), {}, 250);
+    expect(result.bpm!).toBeCloseTo(200, 0);
+  });
 });
 
 describe('tempoEstimator: noisy or incomplete onset patterns', () => {

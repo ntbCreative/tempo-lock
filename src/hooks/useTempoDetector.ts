@@ -326,8 +326,12 @@ export function useTempoDetector() {
   }, [settings.metronomeBars, stopMetronomeInternal]);
 
   const start = useCallback(() => {
-    engineRef.current?.start();
-  }, []);
+    // Seed the mic detector's octave resolution with the current Tap
+    // Tempo value, if any -- lets you establish the quarter note by tapping
+    // it in before pressing Start Listening, rather than leaving the very
+    // first mic-based read to guess the octave blind.
+    engineRef.current?.start(tapState.bpm);
+  }, [tapState.bpm]);
 
   const stop = useCallback(() => {
     engineRef.current?.stop();

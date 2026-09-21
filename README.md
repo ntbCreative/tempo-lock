@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (170 tests as of this build).
+Run `npm run test` for the full suite (172 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,23 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Tap-tempo-seeded octave resolution (this build)**: when the tempo
+  estimator has to resolve an ambiguous reading (is this a 120 BPM
+  quarter-note pulse or its 240 BPM double-time?), it can now use the
+  current Tap Tempo value as a reference — tap in the quarter note
+  before pressing Start Listening, and the very first mic-based read
+  uses that to break the tie, instead of guessing blind. Only overrides
+  a genuine octave relationship (half/double/third) with a
+  reasonably-supported candidate near the tapped value; it won't force
+  an unrelated or barely-present reading. This is a meaningful step, not
+  a full solve — octave ambiguity is a known-hard problem in tempo
+  detection, and once the detector locks onto its own reading, the tap
+  reference stops being consulted (the existing ½×/2× live toggle
+  remains the tool for correcting a wrong guess after the fact). Covered
+  by new tests in `tempoEstimator.test.ts`.
+- **Settings explanations (this build)**: Smoothing and Sensitivity now
+  have plain-language descriptions of which direction to move them and
+  why (ghost notes/grace notes vs. a solid, consistent pulse).
 - **Sliding-window re-analysis fix (this build)**: with "Auto-start after"
   set to Off, the BPM readout itself was still showing a stable, fast
   (~200 BPM) tempo with no real input — ruling out both the noise-floor
