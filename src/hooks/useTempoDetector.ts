@@ -43,6 +43,8 @@ export interface DetectorSettings {
   soundKit: SoundKit;
   /** Extra evenly-spaced ticks between the main beat clicks. */
   subdivision: Subdivision;
+  /** Overall click track volume, 0-1. Applies to both auto-triggered and manual clicks; the count-in's own quieter volume is relative to this. */
+  masterVolume: number;
   countInEnabled: boolean;
   countInVolume: number;
   rampEnabled: boolean;
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   clickTrackLengthBars: 0,
   soundKit: 'digital',
   subdivision: 'none',
+  masterVolume: 1,
   countInEnabled: true,
   countInVolume: 0.35,
   rampEnabled: false,
@@ -200,6 +203,12 @@ export function useTempoDetector() {
     window.localStorage.setItem(PRESETS_STORAGE_KEY, serializeSettings({ list: presets }));
   }, [presets]);
 
+  // Volume applies live to whatever's currently playing -- no restart needed.
+  useEffect(() => {
+    metronomeEngineRef.current?.setVolumeScale(settings.masterVolume);
+    countInEngineRef.current?.setVolumeScale(settings.masterVolume * settings.countInVolume);
+  }, [settings.masterVolume, settings.countInVolume]);
+
   useEffect(() => {
     engineRef.current = new LiveTempoEngine({
       ...settings,
@@ -263,7 +272,7 @@ export function useTempoDetector() {
               soundKit: cfg.soundKit,
               subdivision: cfg.subdivision,
               totalBars: cfg.metronomeBars,
-              volumeScale: cfg.countInVolume,
+              volumeScale: cfg.masterVolume * cfg.countInVolume,
             });
           }
         }
@@ -279,6 +288,7 @@ export function useTempoDetector() {
             customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
             soundKit: cfg.soundKit,
             subdivision: cfg.subdivision,
+            volumeScale: cfg.masterVolume,
             totalBars: 0,
           });
           setMetronomeActive(true);
@@ -396,6 +406,7 @@ export function useTempoDetector() {
       customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
       soundKit: cfg.soundKit,
       subdivision: cfg.subdivision,
+      volumeScale: cfg.masterVolume,
       totalBars: cfg.clickTrackLengthBars,
       ramp,
       onFinished: () => {

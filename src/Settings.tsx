@@ -244,6 +244,23 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
     <div className="settings-section__body">
       <div className="control">
         <div className="control__label-row">
+          <label htmlFor="master-volume">Click volume</label>
+          <span>{Math.round(settings.masterVolume * 100)}%</span>
+        </div>
+        <input
+          id="master-volume"
+          type="range"
+          min={0.2}
+          max={1}
+          step={0.02}
+          value={settings.masterVolume}
+          onChange={(e) => updateSettings({ masterVolume: Number(e.target.value) })}
+        />
+        <p className="settings-note">Applies live, even while a click is already playing.</p>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
           <label htmlFor="sound-kit">Click sound</label>
         </div>
         <select

@@ -103,6 +103,11 @@ export class MetronomeEngine {
     return this.feel;
   }
 
+  /** Live-adjusts the overall click volume (0-1). Applies to all future clicks immediately -- no restart needed, since volume is read fresh at the moment each click is synthesized. */
+  setVolumeScale(next: number): void {
+    this.volumeScale = Math.max(0, Math.min(1, next));
+  }
+
   start(bpm: number, startAtPerfSec: number, beatsPerBarOrOptions: number | MetronomeStartOptions = {}): void {
     this.stop();
 
@@ -221,7 +226,7 @@ export class MetronomeEngine {
 
     if (sound === 'clap') {
       if (clapVoiceForKit(this.soundKit) === 'digital-clap') {
-        this.playNoiseBurst(audioTime, { freq: 1800, q: 0.9, peak: 0.5, duration: 0.07 });
+        this.playNoiseBurst(audioTime, { freq: 1800, q: 0.9, peak: 0.7, duration: 0.07 });
       } else {
         this.playKitVoice(audioTime, true);
       }
@@ -307,7 +312,7 @@ export class MetronomeEngine {
   }
 
   private playDigital(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, { freq: accent ? 1500 : 1000, peak: accent ? 0.35 : 0.22, duration: 0.045 });
+    this.playTone(audioTime, { freq: accent ? 1500 : 1000, peak: accent ? 0.55 : 0.38, duration: 0.045 });
   }
 
   private playWoodblock(audioTime: number, accent: boolean): void {
@@ -315,14 +320,14 @@ export class MetronomeEngine {
       type: 'triangle',
       freq: accent ? 1300 : 1000,
       pitchDropTo: accent ? 700 : 550,
-      peak: accent ? 0.4 : 0.26,
+      peak: accent ? 0.6 : 0.42,
       duration: 0.05,
     });
   }
 
   private playRimshot(audioTime: number, accent: boolean): void {
-    this.playNoiseBurst(audioTime, { freq: 3200, q: 1.1, peak: accent ? 0.45 : 0.28, duration: 0.03 });
-    this.playTone(audioTime, { type: 'triangle', freq: accent ? 2200 : 1800, peak: accent ? 0.2 : 0.12, duration: 0.02 });
+    this.playNoiseBurst(audioTime, { freq: 3200, q: 1.1, peak: accent ? 0.65 : 0.45, duration: 0.03 });
+    this.playTone(audioTime, { type: 'triangle', freq: accent ? 2200 : 1800, peak: accent ? 0.3 : 0.18, duration: 0.02 });
   }
 
   private playCowbell(audioTime: number, accent: boolean): void {
@@ -330,7 +335,7 @@ export class MetronomeEngine {
     if (!ctx) return;
 
     const duration = accent ? 0.09 : 0.06;
-    const peak = (accent ? 0.32 : 0.2) * this.volumeScale;
+    const peak = (accent ? 0.42 : 0.28) * this.volumeScale;
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = 2500;
@@ -358,19 +363,19 @@ export class MetronomeEngine {
     this.playNoiseBurst(audioTime, {
       freq: 7000,
       q: 0.7,
-      peak: accent ? 0.3 : 0.18,
+      peak: accent ? 0.48 : 0.3,
       duration: accent ? 0.035 : 0.02,
       highpass: true,
     });
   }
 
   private playClave(audioTime: number, accent: boolean): void {
-    this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.38 : 0.24, duration: 0.02 });
+    this.playTone(audioTime, { freq: accent ? 2600 : 2200, peak: accent ? 0.58 : 0.4, duration: 0.02 });
   }
 
   /** A quiet, plain tick for subdivision clicks -- deliberately simple and consistent regardless of the chosen sound kit, so it's clearly distinguishable from the main beat. */
   private playSubdivisionTick(audioTime: number): void {
-    this.playTone(audioTime, { freq: 900, peak: 0.14, duration: 0.02 });
+    this.playTone(audioTime, { freq: 900, peak: 0.22, duration: 0.02 });
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {

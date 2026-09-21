@@ -288,6 +288,11 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Click volume**: Settings → Sounds → Click volume, applies live even
+  while a click is already playing (no restart). Also raised the base
+  gain of every synthesized sound (roughly 1.4-1.8x, cowbell less to
+  manage its two-oscillator headroom) — the previous levels were tuned
+  conservatively to avoid clipping and turned out too quiet in practice.
 - **Tap-tempo-seeded octave resolution (this build)**: when the tempo
   estimator has to resolve an ambiguous reading (is this a 120 BPM
   quarter-note pulse or its 240 BPM double-time?), it can now use the
