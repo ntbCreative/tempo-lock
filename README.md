@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (186 tests as of this build).
+Run `npm run test` for the full suite (192 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,29 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Lock stability grows over time (this build)**: previously, an
+  established tempo lock was exactly as easy to dislodge with 3
+  consecutive agreeing estimates whether it had been locked for half a
+  second or thirty seconds — described as "the app is listening too
+  intently" and "it should be consistent after 2-4 bars," which was
+  exactly right. A lock now gets progressively more resistant to a major
+  change the longer it holds (one extra required consecutive estimate
+  per ~8 stable updates, capped at +3), so a few seconds of noise-driven
+  agreement can't knock out an already-solid reading the way it could
+  before — while a genuine, sustained tempo change can still eventually
+  get through. A freshly-acquired lock is unaffected (still just 3, same
+  as before). Covered by 6 new tests in `continuity.test.ts`.
+- **Play/Stop merged into one button (this build)**: instead of a
+  separate "Stop Click Track" button appearing elsewhere on screen, the
+  same button now toggles — "Play Click" when nothing's playing, "Stop
+  Click" once it is, regardless of whether the click was started manually
+  or auto-triggered by the mic.
+- **Click mode moved to the main screen (this build)**: switching between
+  All Beats / Accent 1 / 2 & 4 Clap / Custom no longer requires opening
+  Settings — it's right above the manual click controls. The mode-specific
+  sub-options (the count-in-bars choice for 2 & 4 Clap, the custom beat
+  list for Custom mode) stay in Settings, since those are secondary
+  configuration for whichever mode is picked, not the mode choice itself.
 - **4 new sound kits + maximum gain (this build)**: added Kick (low
   pitch-swept thump), Snare (noise crack + body tone), Shaker (soft,
   sustained noise, gentler than the hi-hat), and Triangle (two detuned

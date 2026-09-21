@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
 import { doubleFeel, halveFeel } from './lib/feel';
+import { ACCENT_MODE_OPTIONS, type AccentMode } from './lib/clickPattern';
 import Settings from './Settings';
 import './App.css';
 
@@ -274,13 +275,24 @@ function App() {
           Tap Tempo
         </button>
 
-        {metronomeActive && (
-          <button type="button" className="big-button big-button--stop-metronome" onClick={stopMetronome}>
-            Stop Click Track
-          </button>
-        )}
-
         <div className="manual-metronome">
+          <div className="control click-mode-control">
+            <div className="control__label-row">
+              <label htmlFor="accent-mode-main">Click mode</label>
+            </div>
+            <select
+              id="accent-mode-main"
+              value={settings.accentMode}
+              onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
+            >
+              {ACCENT_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="manual-metronome__bpm-row">
             <button
               type="button"
@@ -330,8 +342,12 @@ function App() {
             value={manualBpm}
             onChange={(e) => setManualBpm(Number(e.target.value))}
           />
-          <button type="button" className="big-button big-button--manual-click" onClick={playManualClick}>
-            Play Click
+          <button
+            type="button"
+            className={`big-button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
+            onClick={metronomeActive ? stopMetronome : playManualClick}
+          >
+            {metronomeActive ? 'Stop Click' : 'Play Click'}
           </button>
         </div>
 

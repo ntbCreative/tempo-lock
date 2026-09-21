@@ -10,7 +10,11 @@
  *  - Small changes near the current tempo are smoothed in gradually.
  *  - Large changes (including half-time/double-time flips) require three
  *    consecutive, mutually-agreeing estimates before they replace the
- *    displayed tempo.
+ *    displayed tempo -- and that requirement grows the longer the current
+ *    tempo has already held, so an established lock gets progressively
+ *    harder to dislodge by noise rather than staying equally "loose"
+ *    forever. A genuine, sustained tempo change can still eventually get
+ *    through; a few seconds of spurious agreeing noise can't.
  *  - Weak, incoherent or missing evidence never overwrites the displayed
  *    tempo, but does erode displayed confidence and clears any pending
  *    candidate (so a brief dropout doesn't "bank" partial progress toward a
@@ -38,8 +42,12 @@ export interface ContinuityConfig {
   majorChangeThreshold: number;
   /** Relative tolerance for two pending-candidate estimates to count as "agreeing". */
   agreementTolerance: number;
-  /** Consecutive agreeing major-change estimates required before committing. */
+  /** Consecutive agreeing major-change estimates required before committing, before any stability bonus. */
   requiredConsecutive: number;
+  /** How many stable ticks (updates since the last committed change) it takes to add one more required consecutive estimate. */
+  stableTicksPerBonus: number;
+  /** Cap on how many extra consecutive estimates a long-held lock can demand, however long it's been stable. */
+  maxStabilityBonus: number;
   /** Minimum per-estimate confidence to be treated as usable evidence at all. */
   minConfidenceToAccept: number;
   /** Minimum onset count to be treated as usable evidence at all. */
@@ -55,6 +63,8 @@ export const DEFAULT_CONTINUITY_CONFIG: ContinuityConfig = {
   majorChangeThreshold: 0.08,
   agreementTolerance: 0.05,
   requiredConsecutive: 3,
+  stableTicksPerBonus: 8,
+  maxStabilityBonus: 3,
   minConfidenceToAccept: 0.35,
   // Requiring a bit more onset evidence before accepting ANY estimate
   // reduces the chance that a handful of incidental transients right as
@@ -74,10 +84,12 @@ export interface ContinuityState {
   confidence: number;
   status: DetectionStatus;
   pendingCandidate: PendingCandidate | null;
+  /** Updates since the current displayedBpm was last established (reset to 0 on acquisition or a committed change). Used to grow resistance to further change the longer a lock holds. */
+  stableTicks: number;
 }
 
 export function createContinuityState(): ContinuityState {
-  return { displayedBpm: null, confidence: 0, status: 'finding', pendingCandidate: null };
+  return { displayedBpm: null, confidence: 0, status: 'finding', pendingCandidate: null, stableTicks: 0 };
 }
 
 /** Alias kept for readability at call sites: starting fresh IS resetting. */
@@ -101,6 +113,11 @@ function statusFor(displayedBpm: number | null, confidence: number, cfg: Continu
   return confidence >= cfg.lowConfidenceThreshold ? 'locked' : 'low-confidence';
 }
 
+/** How many extra consecutive confirming estimates a lock's current stability demands, on top of the base requirement. Grows with stableTicks, capped at maxStabilityBonus. */
+function stabilityBonus(stableTicks: number, cfg: ContinuityConfig): number {
+  return Math.min(cfg.maxStabilityBonus, Math.floor(stableTicks / cfg.stableTicksPerBonus));
+}
+
 /**
  * Advance continuity state by one estimate. `evidence` is `null` when no
  * estimate was available at all for this tick (e.g. silence, or not enough
@@ -116,13 +133,15 @@ export function updateContinuity(
   if (!isUsableEvidence(evidence, cfg)) {
     // Weak, incoherent, missing, or out-of-range evidence: never overwrite
     // the displayed tempo, decay confidence, and drop any pending candidate
-    // so a brief dropout doesn't carry over partial progress.
+    // so a brief dropout doesn't carry over partial progress. The lock
+    // hasn't actually changed, so it keeps counting toward extra stability.
     const decayedConfidence = state.confidence * 0.4;
     return {
       displayedBpm: state.displayedBpm,
       confidence: decayedConfidence,
       status: statusFor(state.displayedBpm, decayedConfidence, cfg),
       pendingCandidate: null,
+      stableTicks: state.displayedBpm === null ? 0 : state.stableTicks + 1,
     };
   }
 
@@ -136,6 +155,7 @@ export function updateContinuity(
       confidence,
       status: statusFor(evidenceBpm, confidence, cfg),
       pendingCandidate: null,
+      stableTicks: 0,
     };
   }
 
@@ -143,7 +163,8 @@ export function updateContinuity(
 
   if (relativeDiff <= cfg.majorChangeThreshold) {
     // Small drift: smooth toward it, and treat this as reaffirming the
-    // current tempo (clears any pending change-of-tempo candidate).
+    // current tempo (clears any pending change-of-tempo candidate). Still
+    // the same lock, so stability keeps accumulating.
     const smoothedBpm = clampBpm(
       state.displayedBpm + cfg.smoothing * (evidenceBpm - state.displayedBpm),
       cfg
@@ -155,6 +176,7 @@ export function updateContinuity(
       confidence: smoothedConfidence,
       status: statusFor(smoothedBpm, smoothedConfidence, cfg),
       pendingCandidate: null,
+      stableTicks: state.stableTicks + 1,
     };
   }
 
@@ -167,24 +189,33 @@ export function updateContinuity(
     pending = { bpm: evidenceBpm, count: 1 };
   }
 
-  if (pending.count >= cfg.requiredConsecutive) {
-    // Enough consistent support: commit the change.
+  const requiredConsecutive = cfg.requiredConsecutive + stabilityBonus(state.stableTicks, cfg);
+
+  if (pending.count >= requiredConsecutive) {
+    // Enough consistent support -- including whatever extra a long-held
+    // lock demanded -- to commit the change. This IS a new lock, so its
+    // own stability clock starts fresh.
     const confidence = evidence!.confidence;
     return {
       displayedBpm: pending.bpm,
       confidence,
       status: statusFor(pending.bpm, confidence, cfg),
       pendingCandidate: null,
+      stableTicks: 0,
     };
   }
 
   // Still gathering consensus -- keep showing the current tempo, erode
-  // confidence slightly since incoming evidence disagrees with it.
+  // confidence slightly since incoming evidence disagrees with it. Not
+  // committed yet, so this is still the same lock, still accumulating
+  // stability (which is exactly what makes a spurious challenge less
+  // likely to succeed the longer it takes).
   const erodedConfidence = state.confidence * 0.95;
   return {
     displayedBpm: state.displayedBpm,
     confidence: erodedConfidence,
     status: statusFor(state.displayedBpm, erodedConfidence, cfg),
     pendingCandidate: pending,
+    stableTicks: state.stableTicks + 1,
   };
 }

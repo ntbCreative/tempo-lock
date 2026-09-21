@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
-import type { AccentMode, SoundKit, Subdivision } from './lib/clickPattern';
+import type { SoundKit, Subdivision } from './lib/clickPattern';
 import { SOUND_KITS, SUBDIVISION_OPTIONS } from './lib/clickPattern';
 import { THEMES, type ThemeId } from './lib/themes';
 import { createSilentWavDataUri } from './audio/silentAudio';
@@ -25,13 +25,6 @@ const SIGNATURE_OPTIONS: { label: string; beatsPerBar: number }[] = [
   { label: '4/4', beatsPerBar: 4 },
   { label: '5/4', beatsPerBar: 5 },
   { label: '6/8', beatsPerBar: 6 },
-];
-
-const ACCENT_MODE_OPTIONS: { label: string; value: AccentMode }[] = [
-  { label: 'All beats', value: 'all' },
-  { label: 'Accent 1', value: 'first' },
-  { label: '2 & 4 clap', value: 'backbeat' },
-  { label: 'Custom', value: 'custom' },
 ];
 
 const SECTION_TITLES: Record<SettingsSectionId, string> = {
@@ -138,22 +131,7 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
         </select>
       </div>
 
-      <div className="control">
-        <div className="control__label-row">
-          <label htmlFor="accent-mode">Click mode</label>
-        </div>
-        <select
-          id="accent-mode"
-          value={settings.accentMode}
-          onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
-        >
-          {ACCENT_MODE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <p className="settings-note">Click mode itself now lives on the main screen, next to the click controls.</p>
 
       {settings.accentMode === 'custom' && (
         <div className="control">

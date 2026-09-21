@@ -217,6 +217,7 @@ describe('continuity: state reset', () => {
       confidence: 0,
       status: 'finding',
       pendingCandidate: null,
+      stableTicks: 0,
     });
   });
 
@@ -227,5 +228,88 @@ describe('continuity: state reset', () => {
     expect(resetState.displayedBpm).toBeNull();
     expect(resetState.pendingCandidate).toBeNull();
     expect(resetState.status).toBe('finding');
+  });
+});
+
+describe('continuity: lock stability grows resistance to further change', () => {
+  it('a freshly-acquired lock still commits a major change after the base 3 consecutive estimates', () => {
+    // Matches pre-existing behavior: no stability bonus yet right after acquisition.
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(90));
+    state = updateContinuity(state, evidence(90));
+    state = updateContinuity(state, evidence(90));
+    expect(state.displayedBpm).toBeCloseTo(90, 0);
+  });
+
+  it('an established lock demands more than 3 consecutive estimates once it has held for a while', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    // Hold the lock steady for well past one stability-bonus step (8 ticks).
+    for (let i = 0; i < 12; i++) {
+      state = updateContinuity(state, evidence(120));
+    }
+    expect(state.stableTicks).toBeGreaterThanOrEqual(8);
+
+    // A challenge that would have succeeded after 3 consecutive estimates on
+    // a fresh lock should NOT succeed yet on this long-held one.
+    state = updateContinuity(state, evidence(90));
+    state = updateContinuity(state, evidence(90));
+    state = updateContinuity(state, evidence(90));
+    expect(state.displayedBpm).toBeCloseTo(120, 0);
+    expect(state.pendingCandidate?.count).toBe(3);
+  });
+
+  it('a genuine, sustained challenge can still eventually override a long-held lock', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    for (let i = 0; i < 12; i++) {
+      state = updateContinuity(state, evidence(120));
+    }
+    // Keep feeding agreeing estimates well past 3 -- a real, sustained
+    // tempo change should still get through, just not instantly.
+    for (let i = 0; i < 6; i++) {
+      state = updateContinuity(state, evidence(90));
+      if (state.displayedBpm && Math.abs(state.displayedBpm - 90) < 1) break;
+    }
+    expect(state.displayedBpm).toBeCloseTo(90, 0);
+  });
+
+  it('the stability bonus is capped, so an extremely long-held lock does not become permanently unchangeable', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    for (let i = 0; i < 100; i++) {
+      state = updateContinuity(state, evidence(120));
+    }
+    // Even after a huge number of stable ticks, the required count is capped
+    // (base 3 + max bonus 3 = 6), not ever-growing.
+    for (let i = 0; i < 6; i++) {
+      state = updateContinuity(state, evidence(90));
+    }
+    expect(state.displayedBpm).toBeCloseTo(90, 0);
+  });
+
+  it('a newly-committed change resets stability, so it is immediately vulnerable to a fresh challenge again', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    for (let i = 0; i < 12; i++) {
+      state = updateContinuity(state, evidence(120));
+    }
+    // Force through a genuine change to 90 (matches the "eventually overrides" test above).
+    for (let i = 0; i < 6; i++) {
+      state = updateContinuity(state, evidence(90));
+      if (state.displayedBpm && Math.abs(state.displayedBpm - 90) < 1) break;
+    }
+    expect(state.stableTicks).toBe(0);
+
+    // Immediately after, only 3 consecutive estimates should be needed again.
+    state = updateContinuity(state, evidence(140));
+    state = updateContinuity(state, evidence(140));
+    state = updateContinuity(state, evidence(140));
+    expect(state.displayedBpm).toBeCloseTo(140, 0);
+  });
+
+  it('weak/missing evidence still counts toward stability (the lock has not actually changed)', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    for (let i = 0; i < 12; i++) {
+      state = updateContinuity(state, null);
+    }
+    expect(state.stableTicks).toBeGreaterThanOrEqual(8);
+    expect(state.displayedBpm).toBe(120);
   });
 });

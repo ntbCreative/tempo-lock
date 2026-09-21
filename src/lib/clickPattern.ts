@@ -6,6 +6,13 @@
 
 export type AccentMode = 'all' | 'first' | 'backbeat' | 'custom';
 
+export const ACCENT_MODE_OPTIONS: { label: string; value: AccentMode }[] = [
+  { label: 'All beats', value: 'all' },
+  { label: 'Accent 1', value: 'first' },
+  { label: '2 & 4 clap', value: 'backbeat' },
+  { label: 'Custom', value: 'custom' },
+];
+
 export type ClickSound = 'accent' | 'normal' | 'clap' | 'mute';
 
 export interface ClickPatternConfig {
