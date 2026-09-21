@@ -196,6 +196,14 @@ function App() {
         {isListening && (
           <p className="notice notice--diagnostic">
             {engineState.onsetCount} onsets · {confidencePercent}% confidence · {signalPercent}% signal
+            {engineState.candidates.length > 0 && (
+              <>
+                {' · candidates: '}
+                {engineState.candidates
+                  .map((c) => `${Math.round(c.bpm)} (${Math.round(c.score * 100)}%, n=${c.supportCount})`)
+                  .join(', ')}
+              </>
+            )}
           </p>
         )}
 

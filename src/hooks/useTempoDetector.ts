@@ -128,6 +128,7 @@ export function useTempoDetector() {
     continuity: createContinuityState(),
     signalLevel: 0,
     onsetCount: 0,
+    candidates: [],
   });
   const [tapState, setTapState] = useState<TapTempoState>(createTapTempoState());
   const [metronomeActive, setMetronomeActive] = useState(false);

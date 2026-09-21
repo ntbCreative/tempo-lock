@@ -288,6 +288,24 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Candidate-list diagnostics (this build)**: despite several
+  reasonable, targeted fixes across sessions (debounce, noise floor,
+  re-analysis overlap, confidence calibration, lock stability), a report
+  of jumping between 80 → 210 → 240 → 90 while clicking a stick at a
+  steady 80 BPM suggests the raw tempo estimator itself is, for
+  stretches of several seconds at a time, genuinely computing a wrong
+  answer with enough apparent support to survive the stability
+  safeguards — not just an occasional noisy estimate slipping through.
+  That points upstream of continuity, into onset detection or the
+  estimator's candidate scoring, which none of the fixes so far have
+  been able to directly observe. The diagnostic line (visible under the
+  meters whenever listening, not just while status is "Finding tempo…")
+  now shows the estimator's actual top 3 candidates with their score and
+  support count, e.g. "candidates: 240 (52%, n=9), 80 (31%, n=6), 60
+  (12%, n=3)" — real visibility into what the estimator is choosing
+  between, rather than just the final smoothed number. This doesn't fix
+  the bug; it's meant to make the next report diagnosable instead of
+  another guess.
 - **Lock stability grows over time (this build)**: previously, an
   established tempo lock was exactly as easy to dislodge with 3
   consecutive agreeing estimates whether it had been locked for half a

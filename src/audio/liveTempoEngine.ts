@@ -6,6 +6,7 @@ import {
   maskBelowNoiseFloor,
 } from '../lib/onsetDetection';
 import { estimateTempo, type TempoEstimatorConfig } from '../lib/tempoEstimator';
+import type { TempoCandidate } from '../lib/types';
 import {
   createContinuityState,
   updateContinuity,
@@ -47,6 +48,8 @@ export interface EngineState {
   /** 0-1 rough signal-strength meter for the UI, independent of tempo confidence. */
   signalLevel: number;
   onsetCount: number;
+  /** The raw estimator's top few candidates (bpm/score/supportCount) from the most recent analysis tick, for diagnostics -- lets you see what the estimator is actually choosing between, not just the final smoothed number. */
+  candidates: TempoCandidate[];
   errorMessage?: string;
 }
 
@@ -126,6 +129,7 @@ export class LiveTempoEngine {
       continuity: createContinuityState(),
       signalLevel: 0,
       onsetCount: 0,
+      candidates: [],
     };
   }
 
@@ -254,6 +258,7 @@ export class LiveTempoEngine {
       continuity: createContinuityState(),
       signalLevel: 0,
       onsetCount: 0,
+      candidates: [],
     };
   }
 
@@ -393,6 +398,10 @@ export class LiveTempoEngine {
       continuityConfig
     );
 
-    this.emit({ continuity: nextContinuity, onsetCount: this.onsetTimesSec.length });
+    this.emit({
+      continuity: nextContinuity,
+      onsetCount: this.onsetTimesSec.length,
+      candidates: rawEstimate.candidates.slice(0, 3),
+    });
   }
 }
