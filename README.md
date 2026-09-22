@@ -288,6 +288,24 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **BPM + click controls anchor at least half the page (this build)**: the
+  BPM readout and the manual click controls are now wrapped together in a
+  `min-height: 55vh` hero section, since detecting and clicking a tempo is
+  the app's whole point — everything else (setlist, secondary notices)
+  lives below it. Reset to `auto` height in the landscape layout (where
+  vertical space is already tight) via `display: contents`, so the two-
+  column reflow still works correctly there instead of forcing one giant
+  unbroken block into a single column.
+- **Visual refresh (this build)**: softer, more consistent corner
+  rounding across buttons/panels/inputs via shared `--radius-*` tokens;
+  layered shadows for depth on buttons, cards, and the settings panel;
+  a frosted backdrop blur behind the Settings overlay; smoother
+  transitions on presses and state changes; a stronger, more atmospheric
+  glow on the BPM readout plus a very subtle radial gradient behind it;
+  and an explicit `:focus-visible` ring in the accent color on every
+  interactive element, for keyboard/switch-control navigation. Contrast
+  ratios and touch target sizes are unchanged — this is a depth/polish
+  pass, not a redesign.
 - **Candidate-list diagnostics (this build)**: despite several
   reasonable, targeted fixes across sessions (debounce, noise floor,
   re-analysis overlap, confidence calibration, lock stability), a report

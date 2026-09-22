@@ -150,6 +150,7 @@ function App() {
           {announcement}
         </div>
 
+        <section className="stage__hero">
         <div className="bpm-readout" role="group" aria-label={bpmAriaLabel}>
           <span className="bpm-readout__value" aria-hidden="true">
             {displayBpm ?? '--'}
@@ -358,6 +359,7 @@ function App() {
             {metronomeActive ? 'Stop Click' : 'Play Click'}
           </button>
         </div>
+        </section>
 
         <div className="setlist">
           <div className="setlist__save-row">

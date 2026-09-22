@@ -12,6 +12,13 @@
   --accent-glow: 255, 176, 32;
   --secondary: #4fd8e0;
   --secondary-dim: #1f4a4c;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 [data-theme='cyan'] {
@@ -76,6 +83,7 @@ body {
   display: flex;
   flex-direction: column;
   font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  background: radial-gradient(circle at 50% 28%, rgba(var(--accent-glow), 0.07), transparent 60%), var(--bg);
   padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0)
     env(safe-area-inset-left, 0);
 }
@@ -129,9 +137,20 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 24px;
+  padding: 12px 24px 24px;
+}
+
+/* The BPM readout + click controls together anchor the page -- guaranteed
+   at least half the viewport height, since this is the app's core function. */
+.stage__hero {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
   gap: 20px;
-  padding: 12px 24px 24px;
+  min-height: 55vh;
 }
 
 .bpm-readout {
@@ -147,7 +166,7 @@ body {
   font-size: min(30vw, 168px);
   font-weight: 500;
   color: var(--accent);
-  text-shadow: 0 0 40px rgba(var(--accent-glow), 0.25);
+  text-shadow: 0 0 60px rgba(var(--accent-glow), 0.35), 0 0 16px rgba(var(--accent-glow), 0.2);
 }
 
 .bpm-readout__unit {
@@ -223,16 +242,17 @@ body {
 
 .meter__track {
   height: 8px;
-  border-radius: 4px;
+  border-radius: 999px;
   background: var(--bg-raised);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 
 .meter__fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 999px;
   background: var(--text-dim);
-  transition: width 150ms ease-out;
+  transition: width 200ms var(--ease);
 }
 
 .meter__fill--locked {
@@ -282,22 +302,31 @@ body {
   width: 100%;
   max-width: 420px;
   padding: 20px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: none;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: transform 80ms ease-out, filter 120ms ease-out;
+  box-shadow: var(--shadow-sm);
+  transition: transform 140ms var(--ease), box-shadow 140ms var(--ease), filter 140ms var(--ease);
 }
 
 .big-button:active {
   transform: scale(0.98);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .big-button:hover {
+    filter: brightness(1.08);
+  }
 }
 
 .big-button--start {
   background: var(--accent);
   color: #1a1200;
+  box-shadow: var(--shadow-sm), 0 0 28px rgba(var(--accent-glow), 0.25);
 }
 
 .big-button--stop {
@@ -314,6 +343,13 @@ body {
 .big-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .control__label-row {
@@ -335,24 +371,22 @@ body {
   background: transparent;
 }
 
-.control select {
-  width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  background: var(--bg-raised);
-  color: var(--text);
-  border: 1px solid var(--line);
-  font-size: 15px;
-}
-
+.control select,
 .control input[type='text'] {
   width: 100%;
-  padding: 12px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text);
   border: 1px solid var(--line);
   font-size: 15px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 140ms var(--ease);
+}
+
+.control select:focus-visible,
+.control input[type='text']:focus-visible {
+  border-color: var(--accent);
 }
 
 .manual-metronome {
@@ -376,8 +410,9 @@ body {
   gap: 8px;
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 10px;
+  box-shadow: var(--shadow-sm);
 }
 
 .manual-metronome__bpm input {
@@ -401,8 +436,9 @@ body {
   width: 100%;
   max-width: 420px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .mode-toggle__option {
@@ -414,6 +450,7 @@ body {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
 }
 
 .mode-toggle__option:disabled {
@@ -432,17 +469,20 @@ body {
 
 .pill-button {
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text);
   border: 1px solid var(--line);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
 }
 
 .pill-button:active {
   transform: scale(0.96);
+  box-shadow: none;
 }
 
 .pill-button[data-active='true'] {
@@ -478,11 +518,12 @@ body {
   background: transparent;
   border: 1px solid var(--line);
   color: var(--text-dim);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   width: 36px;
   height: 36px;
   font-size: 16px;
   cursor: pointer;
+  transition: transform 140ms var(--ease), border-color 140ms var(--ease);
 }
 
 .settings-toggle:active {
@@ -493,7 +534,9 @@ body {
 .settings-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
   z-index: 20;
@@ -509,11 +552,12 @@ body {
 .settings-panel {
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   width: 100%;
   max-width: 480px;
   max-height: 88vh;
   overflow-y: auto;
+  box-shadow: var(--shadow-md);
   padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0));
 }
 
@@ -540,19 +584,26 @@ body {
   background: var(--bg-raised);
   border: 1px solid var(--line);
   color: var(--text);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   width: 32px;
   height: 32px;
   font-size: 16px;
   cursor: pointer;
+  transition: transform 140ms var(--ease);
+}
+
+.settings-panel__close:active {
+  transform: scale(0.92);
 }
 
 /* Draggable section list */
 .settings-section {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   margin-top: 14px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: opacity 140ms var(--ease);
 }
 
 .settings-section[data-dragging='true'] {
@@ -592,12 +643,17 @@ body {
 .settings-section__reorder-btn {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);
   font-size: 12px;
   cursor: pointer;
+  transition: transform 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.settings-section__reorder-btn:not(:disabled):active {
+  transform: scale(0.9);
 }
 
 .settings-section__reorder-btn:disabled {
@@ -626,6 +682,12 @@ body {
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
+  box-shadow: var(--shadow-sm);
+  transition: transform 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.theme-swatch:active {
+  transform: scale(0.92);
 }
 
 .theme-swatch[data-active='true'] {
@@ -695,8 +757,14 @@ body {
   gap: 8px;
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 4px 4px 4px 14px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 140ms var(--ease);
+}
+
+.setlist__chip:focus-within {
+  border-color: var(--accent);
 }
 
 .setlist__chip-name {
@@ -738,6 +806,20 @@ body {
   }
 
   .stage__main > * {
+    break-inside: avoid;
+    margin: 0 auto 14px;
+  }
+
+  /* The hero wrapper's own box would otherwise force the whole BPM+click
+     cluster to stay unbroken in one column, which is too tall for a short
+     landscape viewport. display: contents removes its box so its children
+     flow directly into the multi-column layout like everything else. */
+  .stage__hero {
+    display: contents;
+    min-height: auto;
+  }
+
+  .stage__hero > * {
     break-inside: avoid;
     margin: 0 auto 14px;
   }
