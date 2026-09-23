@@ -288,6 +288,38 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Hard lock after auto-start (this build)**: for real gig use — count
+  in, play the confirming bars, the app locks the tempo, and it should
+  never move again until you stop it — detection now fully stops
+  re-evaluating the moment the auto-start countdown completes and the
+  click begins. Not just the click's own tempo (which already stayed
+  fixed by default); the BPM readout, confidence, and diagnostics all
+  freeze at their exact values from that moment and stay there for the
+  rest of the session, regardless of what the mic picks up afterward.
+  A "🔒 Locked for this session" notice confirms it visually. Only Stop
+  Listening (a fresh start) clears it. Scoped to the auto-start path
+  specifically, since that's the described workflow; a manually-started
+  click while the mic happens to also be listening is unaffected.
+- **Sample-accurate onset timing (this build)**: a report of the BPM
+  jumping between values with no clean relationship to each other (90 →
+  288 → 212, not clean 2x/3x octave multiples) pointed away from the
+  tempo-estimation logic — which has been the focus of several previous
+  fixes — and toward something more basic: how onset times get their
+  timestamp in the first place. Each analysis tick was reconstructing
+  "when did this audio happen" via a fresh `performance.now()` read and
+  subtracting a sample-count-based delay — but that tick runs on its own
+  timer, independent of when the audio was actually captured, so JS
+  scheduling jitter (event-loop delays, GC pauses, mobile throttling)
+  could put onsets from different ticks on subtly inconsistent time
+  axes, corrupting the interval math between them in a way that looks
+  like noise rather than a clean octave error. Onset timestamps are now
+  anchored to the audio hardware's own sample-accurate clock (each audio
+  chunk's `playbackTime`, captured once per session as a fixed reference
+  point) instead of being reconstructed from wall-clock time on every
+  tick — the same pattern already used successfully in the click
+  engine's own scheduling. This is a genuine, previously-unexamined
+  candidate for the root cause of the erratic-reading reports across
+  several sessions; needs real-world confirmation.
 - **BPM + click controls anchor at least half the page (this build)**: the
   BPM readout and the manual click controls are now wrapped together in a
   `min-height: 55vh` hero section, since detecting and clicking a tempo is

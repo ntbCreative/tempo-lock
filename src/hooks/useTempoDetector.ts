@@ -129,6 +129,7 @@ export function useTempoDetector() {
     signalLevel: 0,
     onsetCount: 0,
     candidates: [],
+    frozen: false,
   });
   const [tapState, setTapState] = useState<TapTempoState>(createTapTempoState());
   const [metronomeActive, setMetronomeActive] = useState(false);
@@ -302,6 +303,11 @@ export function useTempoDetector() {
           setMetronomeBpm(result.metronomeBpm);
           setFeelState(1);
           startPositionPoll();
+          // Gig-ready: once the count-in bars have confirmed a tempo and the
+          // click starts, stop re-evaluating entirely for the rest of this
+          // session -- a locked-in tempo drifting afterward, even silently,
+          // undermines the one thing this workflow needs to be trustworthy.
+          engineRef.current?.freeze();
         }
 
         // While a click track is already playing and the mic is still

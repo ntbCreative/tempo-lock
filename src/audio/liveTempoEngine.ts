@@ -50,6 +50,8 @@ export interface EngineState {
   onsetCount: number;
   /** The raw estimator's top few candidates (bpm/score/supportCount) from the most recent analysis tick, for diagnostics -- lets you see what the estimator is actually choosing between, not just the final smoothed number. */
   candidates: TempoCandidate[];
+  /** True once freeze() has been called -- detection has stopped re-evaluating for the rest of this session; everything above stays exactly as it was. */
+  frozen: boolean;
   errorMessage?: string;
 }
 
@@ -112,6 +114,22 @@ export class LiveTempoEngine {
   private totalSamplesReceived = 0;
   private lastAnalyzedAbsSample = 0;
 
+  // Sample-accurate timing anchor: the AudioContext-clock time
+  // corresponding to sample index 0 of this session, captured once from
+  // the first audio chunk's own playbackTime (hardware-clocked, not
+  // subject to JS event-loop/setInterval jitter). Every onset's absolute
+  // time is derived from this plus a sample-count offset, so onsets
+  // detected on different analysis ticks land on one consistent time
+  // axis instead of each being anchored to a fresh, independently-jittery
+  // performance.now() read -- which was corrupting interval math between
+  // onsets from different ticks in a way that looks like random noise,
+  // not a clean octave error.
+  private audioTimeAtSample0: number | null = null;
+  // Fixed, one-time-sampled offset converting an AudioContext-clock time
+  // into the performance.now()-based "perf seconds" used everywhere else
+  // in this engine (trailing-window cutoffs, calibration timing).
+  private audioToPerfOffset = 0;
+
   // Rolling raw-sample buffer used to compute the energy/onset envelope for
   // the most recently captured audio chunk.
   private pendingSamples: Float32Array = new Float32Array(0);
@@ -122,6 +140,15 @@ export class LiveTempoEngine {
   // resolving octave ambiguity (quarter-note vs half/double-time reads).
   private seedPriorBpm: number | null = null;
 
+  // Once the auto-start countdown completes and a click begins, the hook
+  // calls freeze() so the detector stops re-evaluating entirely for the
+  // rest of this listening session -- for real gig use, a tempo that was
+  // confirmed over the count-in bars and then keeps silently drifting or
+  // jumping around afterward (even if the click's own tempo doesn't move)
+  // is a distraction and a trust problem, not a feature. Only Stop
+  // Listening (which resets the whole session) clears this.
+  private frozen = false;
+
   constructor(options: EngineOptions) {
     this.options = options;
     this.engineState = {
@@ -130,6 +157,7 @@ export class LiveTempoEngine {
       signalLevel: 0,
       onsetCount: 0,
       candidates: [],
+      frozen: false,
     };
   }
 
@@ -139,6 +167,20 @@ export class LiveTempoEngine {
 
   updateOptions(partial: Partial<EngineOptions>): void {
     this.options = { ...this.options, ...partial };
+  }
+
+  /**
+   * Stops re-evaluating tempo for the rest of this listening session --
+   * the displayed BPM, confidence, and candidates all stay exactly as
+   * they are, no matter what the mic picks up afterward. Call this once
+   * the auto-start countdown completes and a click begins: for gig use,
+   * a tempo you confirmed over the count-in bars silently drifting or
+   * jumping around afterward is a trust problem, not a feature. Only
+   * Stop Listening (a fresh start()) clears this.
+   */
+  freeze(): void {
+    this.frozen = true;
+    this.emit({ frozen: true });
   }
 
   private emit(partial: Partial<EngineState>): void {
@@ -180,6 +222,7 @@ export class LiveTempoEngine {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
+    this.audioToPerfOffset = nowSeconds() - this.audioContext.currentTime;
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
     // ScriptProcessorNode is deprecated but remains the most broadly
@@ -253,16 +296,25 @@ export class LiveTempoEngine {
     this.noiseFloor = null;
     this.totalSamplesReceived = 0;
     this.lastAnalyzedAbsSample = 0;
+    this.audioTimeAtSample0 = null;
+    this.frozen = false;
     this.engineState = {
       status: this.engineState.status,
       continuity: createContinuityState(),
       signalLevel: 0,
       onsetCount: 0,
       candidates: [],
+      frozen: false,
     };
   }
 
   private handleAudioProcess(event: AudioProcessingEvent): void {
+    if (this.audioTimeAtSample0 === null) {
+      // This is the first chunk of the session (totalSamplesReceived is
+      // still 0 at this point), so its own hardware-clocked playbackTime
+      // IS the AudioContext-time of sample index 0.
+      this.audioTimeAtSample0 = event.playbackTime;
+    }
     const input = event.inputBuffer.getChannelData(0);
     this.totalSamplesReceived += input.length;
     // Append to the pending buffer, capping total length to avoid unbounded growth.
@@ -285,6 +337,8 @@ export class LiveTempoEngine {
   }
 
   private runAnalysis(): void {
+    if (this.frozen) return;
+
     const sampleRate = this.audioContext?.sampleRate || SAMPLE_RATE_HINT;
     if (this.pendingSamples.length < sampleRate * 0.3) {
       // Not enough audio yet.
@@ -348,11 +402,15 @@ export class LiveTempoEngine {
       thresholdMultiplier,
     });
 
-    // Convert to absolute stream time, then drop anything that falls in
+    // Convert to absolute stream time using the sample-accurate audio
+    // clock (see audioTimeAtSample0's doc comment above) rather than a
+    // fresh performance.now() read here, so onsets from different ticks
+    // land on one consistent time axis. Then drop anything that falls in
     // the prepended overlap region -- those were already considered (and
     // if real, already emitted) on a previous tick.
-    const sliceStartAbsSec = nowSeconds() - (this.totalSamplesReceived - analysisStartAbsSample) / sampleRate;
-    const newOnsetCutoffAbsSec = nowSeconds() - (this.totalSamplesReceived - newStartAbsSample) / sampleRate;
+    if (this.audioTimeAtSample0 === null) return; // no audio received yet
+    const sliceStartAbsSec = this.audioTimeAtSample0 + analysisStartAbsSample / sampleRate + this.audioToPerfOffset;
+    const newOnsetCutoffAbsSec = this.audioTimeAtSample0 + newStartAbsSample / sampleRate + this.audioToPerfOffset;
     const newOnsetsAbsolute = newOnsetsRelativeToSlice
       .map((t) => sliceStartAbsSec + t)
       .filter((t) => t >= newOnsetCutoffAbsSec);

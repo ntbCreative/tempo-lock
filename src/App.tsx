@@ -232,6 +232,10 @@ function App() {
           </p>
         )}
 
+        {engineState.frozen && (
+          <p className="notice notice--locked">🔒 Locked for this session — won't re-detect until you stop listening</p>
+        )}
+
         {!isMicrophoneSupported && (
           <p className="notice notice--warning">
             This browser doesn't support live microphone tempo detection. Tap Tempo still works.
