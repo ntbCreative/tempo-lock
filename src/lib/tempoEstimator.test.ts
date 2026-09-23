@@ -85,6 +85,21 @@ describe('tempoEstimator: tie-breaking between full-time and half-time candidate
     const result = estimateTempo(clickTrain(200, 24), {}, 250);
     expect(result.bpm!).toBeCloseTo(200, 0);
   });
+
+  it('crossValidationBpm (e.g. from the autocorrelation cross-check) resolves octave ambiguity the same way priorBpm does', () => {
+    const train = clickTrain(200, 24);
+    // No priorBpm at all, but a cross-validation signal at 100 (its
+    // half-time harmonic) should still trigger the same override.
+    const result = estimateTempo(train, {}, null, 100);
+    expect(result.bpm!).toBeCloseTo(100, 0);
+  });
+
+  it('checks crossValidationBpm even when priorBpm is absent, and priorBpm takes precedence when both are given', () => {
+    const train = clickTrain(200, 24);
+    // Both point at the same octave-relation candidate: still resolves there.
+    const bothAgree = estimateTempo(train, {}, 100, 100);
+    expect(bothAgree.bpm!).toBeCloseTo(100, 0);
+  });
 });
 
 describe('tempoEstimator: noisy or incomplete onset patterns', () => {

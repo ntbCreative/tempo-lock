@@ -6,6 +6,7 @@ import {
   maskBelowNoiseFloor,
 } from '../lib/onsetDetection';
 import { estimateTempo, type TempoEstimatorConfig } from '../lib/tempoEstimator';
+import { buildImpulseEnvelope, estimateTempoByAutocorrelation } from '../lib/autocorrelation';
 import type { TempoCandidate } from '../lib/types';
 import {
   createContinuityState,
@@ -472,8 +473,31 @@ export class LiveTempoEngine {
       maxBpm: this.options.maxBpm,
     };
     const priorBpm = this.engineState.continuity.displayedBpm ?? this.seedPriorBpm;
+
+    // Second, independent tempo signal (see autocorrelation.ts): a
+    // structurally different algorithm run on the same onsets, used only
+    // to help resolve octave ambiguity, not as the primary estimate.
+    // Needs a few seconds of onset history to be meaningful -- too short
+    // a window can't reveal a periodicity at all.
+    const AUTOCORR_HOP_SEC = 0.02;
+    let crossValidationBpm: number | null = null;
+    if (this.onsetTimesSec.length >= 4) {
+      const rangeStart = this.onsetTimesSec[0];
+      const rangeEnd = this.onsetTimesSec[this.onsetTimesSec.length - 1] + 0.5;
+      if (rangeEnd - rangeStart >= 2) {
+        const impulseEnvelope = buildImpulseEnvelope(this.onsetTimesSec, rangeStart, rangeEnd, AUTOCORR_HOP_SEC);
+        const autocorrCandidates = estimateTempoByAutocorrelation(
+          impulseEnvelope,
+          AUTOCORR_HOP_SEC,
+          this.options.minBpm,
+          this.options.maxBpm
+        );
+        if (autocorrCandidates.length > 0) crossValidationBpm = autocorrCandidates[0].bpm;
+      }
+    }
+
     const relativeOnsets = this.onsetTimesSec.map((t) => t - this.onsetTimesSec[0]);
-    const rawEstimate = estimateTempo(relativeOnsets, estimatorConfig, priorBpm);
+    const rawEstimate = estimateTempo(relativeOnsets, estimatorConfig, priorBpm, crossValidationBpm);
 
     const continuityConfig: Partial<ContinuityConfig> = {
       minBpm: this.options.minBpm,

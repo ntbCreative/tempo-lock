@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (198 tests as of this build).
+Run `npm run test` for the full suite (210 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,28 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Nudge fix + autocorrelation cross-validation (this build)**: found
+  and fixed why −1/+1 "reset to the main tempo" instead of sticking — if
+  live tempo tracking was enabled, it kept blending the running click's
+  tempo back toward the detected value every ~150ms, undoing a manual
+  nudge within about a second. A manual nudge now suppresses that
+  background drift-correction for the rest of the click session, so it
+  can no longer be silently overridden. Also did real research into how
+  established tools (Essentia, librosa, the academic MIR literature --
+  Scheirer 1998, Ellis & Pikrakis 2006, Percival & Tzanetakis 2014) do
+  tempo detection: the dominant approach is autocorrelation of a
+  continuous onset-strength signal, not clustering discrete onset
+  intervals (this app's original approach). Added autocorrelation as a
+  genuinely independent second signal (`autocorrelation.ts`, including
+  parabolic peak interpolation for sub-sample accuracy), cross-checked
+  against the existing estimator specifically for octave (half/double-
+  time) resolution — agreement between two structurally different
+  algorithms is real evidence, not just a second guess from the same
+  method. 18 new tests across `autocorrelation.test.ts` and
+  `tempoEstimator.test.ts`. This is a genuine architectural upgrade
+  grounded in the actual literature, not another ad-hoc heuristic — but
+  like everything else here, it needs real-world testing to confirm it
+  measurably helps.
 - **Audio output latency compensation + manual timing offset (this
   build)**: a report of the click being "displaced ever so slightly" —
   correct tempo, just not landing exactly on the beat — pointed at

@@ -178,6 +178,13 @@ export function useTempoDetector() {
   // both of which are legitimate re-arm points.
   const autoStartSuppressedRef = useRef(false);
 
+  // Once the person manually nudges or adjusts the running click's tempo,
+  // stop the background live-tracking drift-correction (if enabled) from
+  // fighting that decision and blending it back toward the detected
+  // tempo a moment later -- an explicit correction should stick, not get
+  // silently undone. Reset whenever a fresh click session starts.
+  const liveTrackingSuppressedRef = useRef(false);
+
   const clampBpm = useCallback(
     (bpm: number) => Math.min(settingsRef.current.maxBpm, Math.max(settingsRef.current.minBpm, bpm)),
     []
@@ -206,6 +213,7 @@ export function useTempoDetector() {
     setMetronomeActive(false);
     setMetronomeBpm(null);
     setFeelState(1);
+    liveTrackingSuppressedRef.current = false;
     stopPositionPoll();
   }, [stopPositionPoll]);
 
@@ -344,6 +352,7 @@ export function useTempoDetector() {
           setMetronomeActive(true);
           setMetronomeBpm(result.metronomeBpm);
           setFeelState(1);
+          liveTrackingSuppressedRef.current = false;
           startPositionPoll();
           // Gig-ready: once the count-in bars have confirmed a tempo and the
           // click starts, stop re-evaluating entirely for the rest of this
@@ -360,6 +369,7 @@ export function useTempoDetector() {
         // Opt-in only: see liveTempoTrackingEnabled's doc comment for why.
         if (
           cfg.liveTempoTrackingEnabled &&
+          !liveTrackingSuppressedRef.current &&
           metronomeEngineRef.current?.isRunning() &&
           state.continuity.displayedBpm !== null &&
           state.continuity.status !== 'finding'
@@ -450,6 +460,7 @@ export function useTempoDetector() {
   const nudgeBpm = useCallback(
     (deltaBpm: number) => {
       if (metronomeActive) {
+        liveTrackingSuppressedRef.current = true;
         metronomeEngineRef.current?.nudgeBpm(deltaBpm, settingsRef.current.minBpm, settingsRef.current.maxBpm);
       }
       setManualBpmState((prev) => Math.round(clampBpm(prev + deltaBpm)));
@@ -490,12 +501,14 @@ export function useTempoDetector() {
         setMetronomeActive(false);
         setMetronomeBpm(null);
         setFeelState(1);
+        liveTrackingSuppressedRef.current = false;
         stopPositionPoll();
       },
     });
     setMetronomeActive(true);
     setMetronomeBpm(manualBpm);
     setFeelState(1);
+    liveTrackingSuppressedRef.current = false;
     startPositionPoll();
   }, [manualBpm, startPositionPoll, stopPositionPoll]);
 
