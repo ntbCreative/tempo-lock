@@ -22,11 +22,17 @@ const POSITION_POLL_MS = 100;
 const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
 const THEME_STORAGE_KEY = 'tempo-lock:theme';
 const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
+const MAIN_SECTION_ORDER_STORAGE_KEY = 'tempo-lock:main-section-order';
 const PRESETS_STORAGE_KEY = 'tempo-lock:presets';
 
 export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'practice' | 'appearance';
 
 export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'practice', 'appearance'];
+
+/** The main screen's reorderable blocks, below the fixed BPM readout/meters, which always stay anchored at the top. */
+export type MainSectionId = 'mode' | 'start' | 'tap' | 'click';
+
+export const DEFAULT_MAIN_SECTION_ORDER: MainSectionId[] = ['mode', 'start', 'tap', 'click'];
 
 export interface DetectorSettings {
   smoothing: number;
@@ -114,12 +120,22 @@ function loadInitialSectionOrder(): SettingsSectionId[] {
   return [...kept, ...missing];
 }
 
+/** Same reconciliation as loadInitialSectionOrder, for the main screen's reorderable blocks. */
+function loadInitialMainSectionOrder(): MainSectionId[] {
+  const stored = loadInitial(MAIN_SECTION_ORDER_STORAGE_KEY, { order: DEFAULT_MAIN_SECTION_ORDER }).order;
+  const known = new Set<MainSectionId>(DEFAULT_MAIN_SECTION_ORDER);
+  const kept = stored.filter((id): id is MainSectionId => known.has(id as MainSectionId));
+  const missing = DEFAULT_MAIN_SECTION_ORDER.filter((id) => !kept.includes(id));
+  return [...kept, ...missing];
+}
+
 export function useTempoDetector() {
   const [settings, setSettings] = useState<DetectorSettings>(() => loadInitial(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS));
   const [theme, setThemeState] = useState<ThemeId>(
     () => loadInitial(THEME_STORAGE_KEY, { theme: DEFAULT_THEME }).theme
   );
   const [sectionOrder, setSectionOrder] = useState<SettingsSectionId[]>(loadInitialSectionOrder);
+  const [mainSectionOrder, setMainSectionOrder] = useState<MainSectionId[]>(loadInitialMainSectionOrder);
   const [presets, setPresets] = useState<Preset<SongPresetData>[]>(
     () => loadInitial(PRESETS_STORAGE_KEY, { list: [] as Preset<SongPresetData>[] }).list
   );
@@ -130,6 +146,7 @@ export function useTempoDetector() {
     onsetCount: 0,
     candidates: [],
     frozen: false,
+    firstOnsetTimeSec: null,
   });
   const [tapState, setTapState] = useState<TapTempoState>(createTapTempoState());
   const [metronomeActive, setMetronomeActive] = useState(false);
@@ -206,6 +223,10 @@ export function useTempoDetector() {
   }, [sectionOrder]);
 
   useEffect(() => {
+    window.localStorage.setItem(MAIN_SECTION_ORDER_STORAGE_KEY, serializeSettings({ order: mainSectionOrder }));
+  }, [mainSectionOrder]);
+
+  useEffect(() => {
     window.localStorage.setItem(PRESETS_STORAGE_KEY, serializeSettings({ list: presets }));
   }, [presets]);
 
@@ -259,7 +280,8 @@ export function useTempoDetector() {
           previousState,
           bpmForCountdown,
           performance.now() / 1000,
-          { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar }
+          { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar },
+          state.firstOnsetTimeSec
         );
         barCountdownRef.current = result.state;
 
@@ -380,6 +402,10 @@ export function useTempoDetector() {
     setSectionOrder((prev) => moveItem(prev, fromIndex, toIndex));
   }, []);
 
+  const reorderMainSections = useCallback((fromIndex: number, toIndex: number) => {
+    setMainSectionOrder((prev) => moveItem(prev, fromIndex, toIndex));
+  }, []);
+
   const setManualBpm = useCallback(
     (bpm: number) => {
       setManualBpmState(Math.round(clampBpm(bpm)));
@@ -394,6 +420,22 @@ export function useTempoDetector() {
   const doubleManualBpm = useCallback(() => {
     setManualBpmState((prev) => Math.round(clampBpm(prev * 2)));
   }, [clampBpm]);
+
+  /**
+   * Fine tempo adjustment. While a click is running, nudges its live tempo
+   * by an exact amount immediately (no restart); otherwise just adjusts
+   * the pre-play dial. Either way, the dial value stays in sync so it's
+   * correct if you later stop and restart.
+   */
+  const nudgeBpm = useCallback(
+    (deltaBpm: number) => {
+      if (metronomeActive) {
+        metronomeEngineRef.current?.nudgeBpm(deltaBpm, settingsRef.current.minBpm, settingsRef.current.maxBpm);
+      }
+      setManualBpmState((prev) => Math.round(clampBpm(prev + deltaBpm)));
+    },
+    [metronomeActive, clampBpm]
+  );
 
   const playManualClick = useCallback(() => {
     const cfg = settingsRef.current;
@@ -501,6 +543,8 @@ export function useTempoDetector() {
     setTheme,
     sectionOrder,
     reorderSections,
+    mainSectionOrder,
+    reorderMainSections,
     engineState,
     start,
     stop,
@@ -515,6 +559,7 @@ export function useTempoDetector() {
     setManualBpm,
     halveManualBpm,
     doubleManualBpm,
+    nudgeBpm,
     playManualClick,
     feel,
     setFeel,

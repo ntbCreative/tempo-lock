@@ -108,6 +108,59 @@ describe('metronomeSchedule: countdown lifecycle', () => {
   });
 });
 
+describe('metronomeSchedule: anchor time phase-aligns the countdown to the actual first hit', () => {
+  it('anchors the countdown start to anchorTimeSec, not to nowSec, when one is given', () => {
+    // Detection took a couple of beats to accumulate enough onsets to
+    // produce a reading at all: "now" (t=1.3) is well after the player's
+    // actual first hit (t=0.1).
+    const result = updateBarCountdown(createBarCountdownState(), 120, 1.3, { barsRequired: 1 }, 0.1);
+    expect(result.state.lockStartTimeSec).toBe(0.1);
+  });
+
+  it('the click lands exactly N bars after the true first hit, not N bars after the detector caught up', () => {
+    let state = createBarCountdownState();
+    // First onset at t=0.1; detector only manages a reading at t=1.3.
+    let result = updateBarCountdown(state, 120, 1.3, { barsRequired: 2 }, 0.1);
+    state = result.state;
+    // 2 bars at 120 BPM, 4 beats/bar: 2 * 4 * 0.5s = 4s -> should land at 0.1 + 4 = 4.1,
+    // NOT at 1.3 + 4 = 5.3 (which is what anchoring to the detection moment would give).
+    result = updateBarCountdown(state, 120, 4.15, { barsRequired: 2 }, 0.1);
+    expect(result.shouldStartMetronome).toBe(true);
+    expect(result.metronomeStartTimeSec).toBeCloseTo(4.1, 5);
+  });
+
+  it('falls back to nowSec when no anchor is given (unchanged prior behavior)', () => {
+    const result = updateBarCountdown(createBarCountdownState(), 120, 5, { barsRequired: 1 });
+    expect(result.state.lockStartTimeSec).toBe(5);
+  });
+
+  it('falls back to nowSec when the anchor is explicitly null', () => {
+    const result = updateBarCountdown(createBarCountdownState(), 120, 5, { barsRequired: 1 }, null);
+    expect(result.state.lockStartTimeSec).toBe(5);
+  });
+
+  it('only applies the anchor to a fresh countdown start, not to an already-running one', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 1.3, { barsRequired: 1 }, 0.1);
+    state = result.state;
+    expect(state.lockStartTimeSec).toBe(0.1);
+    // A later call with a *different* anchor value shouldn't retroactively
+    // move an already-started countdown.
+    result = updateBarCountdown(state, 120, 1.5, { barsRequired: 1 }, 999);
+    expect(result.state.lockStartTimeSec).toBe(0.1);
+  });
+
+  it('a genuine tempo-change reset still anchors to nowSec, not to the stale original-session anchor', () => {
+    let state = createBarCountdownState();
+    let result = updateBarCountdown(state, 120, 1.3, { barsRequired: 1 }, 0.1);
+    state = result.state;
+    // A real tempo change (>8% drift) resets the countdown; the original
+    // first-onset anchor (0.1) is no longer relevant to the new tempo.
+    result = updateBarCountdown(state, 90, 3.0, { barsRequired: 1 }, 0.1);
+    expect(result.state.lockStartTimeSec).toBe(3.0);
+  });
+});
+
 describe('metronomeSchedule: tolerating real-world confidence noise', () => {
   // The countdown intentionally does NOT take detector confidence/status as
   // input at all -- only the displayed BPM. A noisy room (band mix, other

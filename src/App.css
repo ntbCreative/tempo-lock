@@ -92,7 +92,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 20px 8px;
+  /* A bit more top clearance than before -- iOS draws its own transient
+     "microphone active" indicator over whatever app/page is on screen
+     while listening, which can overlap page content right at the very
+     top. This is an OS-level overlay outside what page CSS can fully
+     avoid (safe-area-insets cover the static notch/home-indicator
+     geometry, not that transient pill), so this is a best-effort buffer,
+     not a guaranteed fix. */
+  padding: 30px 20px 8px;
 }
 
 .stage__brand {
@@ -158,15 +165,24 @@ body {
   align-items: baseline;
   gap: 12px;
   line-height: 1;
+  max-width: 100%;
+  padding: 0 16px;
+  overflow: hidden;
 }
 
 .bpm-readout__value {
   font-family: 'DM Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: min(30vw, 168px);
+  /* Sized to reliably fit a full "199.9"-length reading (5-6 chars with
+     the decimal), not just a bare 3-digit whole number -- the previous
+     30vw/168px sizing was tuned before decimal display was added and
+     could clip off the edge of the screen for anything wider than ~3
+     digits. */
+  font-size: clamp(48px, 18vw, 110px);
   font-weight: 500;
   color: var(--accent);
   text-shadow: 0 0 60px rgba(var(--accent-glow), 0.35), 0 0 16px rgba(var(--accent-glow), 0.2);
+  white-space: nowrap;
 }
 
 .bpm-readout__unit {
@@ -436,6 +452,26 @@ body {
   color: var(--text-dim);
 }
 
+.manual-metronome__bpm .manual-metronome__bpm-live {
+  width: 70px;
+  color: var(--accent);
+  font-family: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.manual-metronome__nudge-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pill-button--small {
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
 .mode-toggle {
   display: flex;
   width: 100%;
@@ -640,6 +676,61 @@ body {
   color: var(--text-dim);
 }
 
+/* Reorderable main-screen sections -- same pattern as Settings sections
+   above, adapted for the main screen: the handle sits at the top of each
+   section, full width, matching the rest of the page's styling. */
+.main-section {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: opacity 140ms var(--ease);
+}
+
+.main-section[data-dragging='true'] {
+  opacity: 0.5;
+}
+
+.main-section__handle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: grab;
+  background: var(--bg-raised);
+}
+
+.main-section__grip {
+  color: var(--text-dim);
+  font-size: 14px;
+  letter-spacing: 2px;
+  user-select: none;
+}
+
+.main-section__title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.main-section__reorder {
+  display: flex;
+  gap: 4px;
+}
+
+.main-section__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
 .settings-section__reorder {
   display: flex;
   gap: 4px;
@@ -830,7 +921,7 @@ body {
   }
 
   .bpm-readout__value {
-    font-size: min(20vh, 104px);
+    font-size: clamp(36px, 14vh, 90px);
   }
 
   .bpm-readout__unit {

@@ -12,13 +12,6 @@ const RANGE_PRESETS: { label: string; min: number; max: number }[] = [
   { label: 'Up-tempo · 140–240', min: 140, max: 240 },
 ];
 
-const METRONOME_BAR_OPTIONS: { label: string; value: 0 | 1 | 2 | 4 }[] = [
-  { label: 'Off', value: 0 },
-  { label: 'After 1 bar', value: 1 },
-  { label: 'After 2 bars', value: 2 },
-  { label: 'After 4 bars', value: 4 },
-];
-
 const SIGNATURE_OPTIONS: { label: string; beatsPerBar: number }[] = [
   { label: '2/4', beatsPerBar: 2 },
   { label: '3/4', beatsPerBar: 3 },
@@ -150,42 +143,12 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
       )}
 
       {settings.accentMode === 'backbeat' && (
-        <div className="control">
-          <div className="control__label-row">
-            <label htmlFor="backbeat-count-in">Count-in before the clap starts</label>
-          </div>
-          <select
-            id="backbeat-count-in"
-            value={settings.backbeatCountInBars}
-            onChange={(e) => updateSettings({ backbeatCountInBars: Number(e.target.value) as 0 | 1 | 2 })}
-          >
-            <option value={0}>Off</option>
-            <option value={1}>1 bar of straight quarters</option>
-            <option value={2}>2 bars of straight quarters</option>
-          </select>
-          <p className="settings-note">
-            A cold 2 & 4 clap has nothing on the downbeat to feel the pulse against. This plays a straight,
-            accented quarter-note count-in first, like counting off "1-2-3-4" before the backbeat pattern starts.
-          </p>
-        </div>
+        <p className="settings-note">
+          "Count-in before the clap starts" now lives on the main screen, next to Click mode.
+        </p>
       )}
 
-      <div className="control">
-        <div className="control__label-row">
-          <label htmlFor="metronome-bars">Auto-start after</label>
-        </div>
-        <select
-          id="metronome-bars"
-          value={settings.metronomeBars}
-          onChange={(e) => updateSettings({ metronomeBars: Number(e.target.value) as 0 | 1 | 2 | 4 })}
-        >
-          {METRONOME_BAR_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <p className="settings-note">Auto-start after now lives on the main screen too, next to the click controls.</p>
 
       <div className="control">
         <div className="control__label-row">

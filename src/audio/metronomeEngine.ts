@@ -55,6 +55,7 @@ export class MetronomeEngine {
   private feel: FeelMultiplier = DEFAULT_FEEL;
   private beatCycleCounter = 0;
   private currentTickMuted = false;
+  private hasPlayedAnyClick = false;
   private bpm = 120;
   private beatsPerBar = 4;
   private accentMode: AccentMode = 'first';
@@ -85,6 +86,20 @@ export class MetronomeEngine {
   updateBpm(targetBpm: number, blendFactor = 0.15): void {
     if (!this.running || this.ramp) return;
     this.bpm = blendTowards(this.bpm, targetBpm, blendFactor);
+  }
+
+  /**
+   * Manually nudges the running tempo by an exact amount (e.g. +/-1 BPM),
+   * applied immediately -- unlike updateBpm's gentle blend, this is a
+   * deliberate, single-step change the person explicitly asked for, so it
+   * should take effect precisely, not gradually. Same no-restart,
+   * no-phase-jump behavior as updateBpm: only affects clicks not yet
+   * scheduled. No-ops during a ramp session for the same reason as
+   * updateBpm -- a ramp has its own programmed tempo schedule.
+   */
+  nudgeBpm(deltaBpm: number, minBpm = 40, maxBpm = 240): void {
+    if (!this.running || this.ramp) return;
+    this.bpm = Math.min(maxBpm, Math.max(minBpm, this.bpm + deltaBpm));
   }
 
   /**
@@ -135,6 +150,7 @@ export class MetronomeEngine {
     this.feel = options.feel ?? 1;
     this.beatCycleCounter = 0;
     this.currentTickMuted = false;
+    this.hasPlayedAnyClick = false;
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
     this.ramp = options.ramp ?? null;
@@ -202,7 +218,21 @@ export class MetronomeEngine {
 
       const bpmForThisBeat = this.bpmForClickIndex(this.nextClickIndex);
       const effectiveTicks = effectiveTicksPerBeat(this.subdivisionTicks, this.feel);
-      const audioTime = this.nextClickTimePerfSec + this.perfToAudioOffset;
+      const rawAudioTime = this.nextClickTimePerfSec + this.perfToAudioOffset;
+      // The very first click of a session is scheduled for a specific
+      // future instant (e.g. an exact bar boundary from the auto-start
+      // countdown), but the code that decides *when* to start reacts on a
+      // polling interval, not instantly -- so by the time start() actually
+      // runs, that instant may already be a few tens of milliseconds in
+      // the past. Silently dropping it (like any other late click) would
+      // skip straight to the next beat, which sounds like a brief pause
+      // before the click "catches on." Instead, only for this first ever
+      // click, nudge it up to right now if it's already passed, rather
+      // than waiting a full beat.
+      const audioTime =
+        !this.hasPlayedAnyClick && rawAudioTime < this.audioContext.currentTime
+          ? this.audioContext.currentTime + 0.01
+          : rawAudioTime;
       if (audioTime >= this.audioContext.currentTime && !this.currentTickMuted) {
         if (isMainBeat) {
           const beatInBar = computeBeatIndexInBar(this.nextClickIndex, this.beatsPerBar);
@@ -217,6 +247,7 @@ export class MetronomeEngine {
         } else {
           this.playSubdivisionTick(audioTime);
         }
+        this.hasPlayedAnyClick = true;
       }
 
       this.nextSubTick += 1;
@@ -453,9 +484,9 @@ export class MetronomeEngine {
     }
   }
 
-  /** A quiet, plain tick for subdivision clicks -- deliberately simple and consistent regardless of the chosen sound kit, so it's clearly distinguishable from the main beat. */
+  /** Subdivision and live-feel extra ticks use the same kit voice as the main click (unaccented), so they sound consistent with it rather than a generic, unrelated tone. */
   private playSubdivisionTick(audioTime: number): void {
-    this.playTone(audioTime, { freq: 900, peak: 0.35, duration: 0.02 });
+    this.playKitVoice(audioTime, false);
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {

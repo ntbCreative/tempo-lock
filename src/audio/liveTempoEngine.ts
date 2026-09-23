@@ -52,6 +52,8 @@ export interface EngineState {
   candidates: TempoCandidate[];
   /** True once freeze() has been called -- detection has stopped re-evaluating for the rest of this session; everything above stays exactly as it was. */
   frozen: boolean;
+  /** The time (perf seconds) of the very first onset detected this session, or null if none yet -- see firstOnsetAbsSec's doc comment. */
+  firstOnsetTimeSec: number | null;
   errorMessage?: string;
 }
 
@@ -130,6 +132,13 @@ export class LiveTempoEngine {
   // in this engine (trailing-window cutoffs, calibration timing).
   private audioToPerfOffset = 0;
 
+  // The very first onset detected this listening session, captured once
+  // and never dropped by the trailing-window cutoff (unlike
+  // onsetTimesSec). Used as a phase anchor for the auto-start bar
+  // countdown -- see useTempoDetector.ts -- on the reasonable assumption
+  // that the first hit a player makes when starting is the downbeat.
+  private firstOnsetAbsSec: number | null = null;
+
   // Rolling raw-sample buffer used to compute the energy/onset envelope for
   // the most recently captured audio chunk.
   private pendingSamples: Float32Array = new Float32Array(0);
@@ -158,6 +167,7 @@ export class LiveTempoEngine {
       onsetCount: 0,
       candidates: [],
       frozen: false,
+      firstOnsetTimeSec: null,
     };
   }
 
@@ -298,6 +308,7 @@ export class LiveTempoEngine {
     this.lastAnalyzedAbsSample = 0;
     this.audioTimeAtSample0 = null;
     this.frozen = false;
+    this.firstOnsetAbsSec = null;
     this.engineState = {
       status: this.engineState.status,
       continuity: createContinuityState(),
@@ -305,6 +316,7 @@ export class LiveTempoEngine {
       onsetCount: 0,
       candidates: [],
       frozen: false,
+      firstOnsetTimeSec: null,
     };
   }
 
@@ -415,6 +427,10 @@ export class LiveTempoEngine {
       .map((t) => sliceStartAbsSec + t)
       .filter((t) => t >= newOnsetCutoffAbsSec);
 
+    if (this.firstOnsetAbsSec === null && newOnsetsAbsolute.length > 0) {
+      this.firstOnsetAbsSec = newOnsetsAbsolute[0];
+    }
+
     this.lastAnalyzedAbsSample = this.totalSamplesReceived;
 
     // Merge with existing onset history, de-duplicate near-identical times,
@@ -460,6 +476,7 @@ export class LiveTempoEngine {
       continuity: nextContinuity,
       onsetCount: this.onsetTimesSec.length,
       candidates: rawEstimate.candidates.slice(0, 3),
+      firstOnsetTimeSec: this.firstOnsetAbsSec,
     });
   }
 }

@@ -1,9 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
 import { doubleFeel, halveFeel } from './lib/feel';
 import { ACCENT_MODE_OPTIONS, type AccentMode } from './lib/clickPattern';
+import { BAR_COUNT_OPTIONS, type BarCount } from './lib/metronomeSchedule';
+import type { MainSectionId } from './hooks/useTempoDetector';
 import Settings from './Settings';
 import './App.css';
+
+const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
+  mode: 'Detection Mode',
+  start: 'Listen',
+  tap: 'Tap Tempo',
+  click: 'Click Track',
+};
 
 /** Formats a feel multiplier for display: 2 -> "2×", 0.5 -> "½×", 0.25 -> "¼×", 0.125 -> "⅛×". */
 function formatFeel(feel: number): string {
@@ -45,6 +54,8 @@ function App() {
     setTheme,
     sectionOrder,
     reorderSections,
+    mainSectionOrder,
+    reorderMainSections,
     engineState,
     start,
     stop,
@@ -59,6 +70,7 @@ function App() {
     setManualBpm,
     halveManualBpm,
     doubleManualBpm,
+    nudgeBpm,
     feel,
     setFeel,
     playManualClick,
@@ -72,6 +84,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [announcement, setAnnouncement] = useState('');
+  const [mainDraggingIndex, setMainDraggingIndex] = useState<number | null>(null);
   const prevMetronomeActiveRef = useRef(false);
 
   useEffect(() => {
@@ -247,122 +260,238 @@ function App() {
           </p>
         )}
 
-        <div className="mode-toggle" role="group" aria-label="Detection mode">
-          <button
-            type="button"
-            className="mode-toggle__option"
-            data-active={settings.mode === 'live'}
-            aria-pressed={settings.mode === 'live'}
-            onClick={() => updateSettings({ mode: 'live' })}
-            disabled={isListening}
-          >
-            Live
-          </button>
-          <button
-            type="button"
-            className="mode-toggle__option"
-            data-active={settings.mode === 'recording'}
-            aria-pressed={settings.mode === 'recording'}
-            onClick={() => updateSettings({ mode: 'recording' })}
-            disabled={isListening}
-          >
-            Recording
-          </button>
-        </div>
-        <p className="settings-note mode-toggle__hint">
-          {settings.mode === 'live'
-            ? 'Tuned for sticks/kit hits.'
-            : 'Tuned for a full song through speakers — isolates the kick/bass pulse.'}
-        </p>
+        {(() => {
+          const mainSectionContent: Record<MainSectionId, ReactElement> = {
+            mode: (
+              <>
+                <div className="mode-toggle" role="group" aria-label="Detection mode">
+                  <button
+                    type="button"
+                    className="mode-toggle__option"
+                    data-active={settings.mode === 'live'}
+                    aria-pressed={settings.mode === 'live'}
+                    onClick={() => updateSettings({ mode: 'live' })}
+                    disabled={isListening}
+                  >
+                    Live
+                  </button>
+                  <button
+                    type="button"
+                    className="mode-toggle__option"
+                    data-active={settings.mode === 'recording'}
+                    aria-pressed={settings.mode === 'recording'}
+                    onClick={() => updateSettings({ mode: 'recording' })}
+                    disabled={isListening}
+                  >
+                    Recording
+                  </button>
+                </div>
+                <p className="settings-note mode-toggle__hint">
+                  {settings.mode === 'live'
+                    ? 'Tuned for sticks/kit hits.'
+                    : 'Tuned for a full song through speakers — isolates the kick/bass pulse.'}
+                </p>
 
-        <button
-          type="button"
-          className={`big-button ${isListening ? 'big-button--stop' : 'big-button--start'}`}
-          onClick={isListening ? stop : start}
-          disabled={!isMicrophoneSupported}
-        >
-          {isListening ? 'Stop Listening' : 'Start Listening'}
-        </button>
+                <div className="control auto-start-control">
+                  <div className="control__label-row">
+                    <label htmlFor="metronome-bars-main">Auto-start after</label>
+                  </div>
+                  <select
+                    id="metronome-bars-main"
+                    value={settings.metronomeBars}
+                    onChange={(e) => updateSettings({ metronomeBars: Number(e.target.value) as BarCount })}
+                  >
+                    {BAR_COUNT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ),
+            start: (
+              <button
+                type="button"
+                className={`big-button ${isListening ? 'big-button--stop' : 'big-button--start'}`}
+                onClick={isListening ? stop : start}
+                disabled={!isMicrophoneSupported}
+              >
+                {isListening ? 'Stop Listening' : 'Start Listening'}
+              </button>
+            ),
+            tap: (
+              <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>
+                Tap Tempo
+              </button>
+            ),
+            click: (
+              <div className="manual-metronome">
+                <div className="control click-mode-control">
+                  <div className="control__label-row">
+                    <label htmlFor="accent-mode-main">Click mode</label>
+                  </div>
+                  <select
+                    id="accent-mode-main"
+                    value={settings.accentMode}
+                    onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
+                  >
+                    {ACCENT_MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-        <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>
-          Tap Tempo
-        </button>
+                {settings.accentMode === 'backbeat' && (
+                  <div className="control click-mode-control">
+                    <div className="control__label-row">
+                      <label htmlFor="backbeat-count-in-main">Count-in before the clap starts</label>
+                    </div>
+                    <select
+                      id="backbeat-count-in-main"
+                      value={settings.backbeatCountInBars}
+                      onChange={(e) => updateSettings({ backbeatCountInBars: Number(e.target.value) as 0 | 1 | 2 })}
+                    >
+                      <option value={0}>Off</option>
+                      <option value={1}>1 bar of straight quarters</option>
+                      <option value={2}>2 bars of straight quarters</option>
+                    </select>
+                  </div>
+                )}
 
-        <div className="manual-metronome">
-          <div className="control click-mode-control">
-            <div className="control__label-row">
-              <label htmlFor="accent-mode-main">Click mode</label>
+                <div className="manual-metronome__bpm-row">
+                  <button
+                    type="button"
+                    className="pill-button"
+                    onClick={metronomeActive ? () => setFeel(halveFeel(feel)) : halveManualBpm}
+                    aria-label={metronomeActive ? 'Halve click rate' : 'Halve tempo'}
+                    aria-pressed={metronomeActive ? feel < 1 : undefined}
+                    data-active={metronomeActive && feel < 1}
+                  >
+                    ½×
+                  </button>
+                  <div className="manual-metronome__bpm">
+                    {metronomeActive ? (
+                      <span className="manual-metronome__bpm-live" aria-label="Current click tempo in beats per minute">
+                        {clickTrackBpm !== null ? clickTrackBpm.toFixed(1) : manualBpm}
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        aria-label="Manual tempo in beats per minute"
+                        min={settings.minBpm}
+                        max={settings.maxBpm}
+                        value={manualBpm}
+                        onChange={(e) => setManualBpm(Number(e.target.value))}
+                      />
+                    )}
+                    <span aria-hidden="true">BPM</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="pill-button"
+                    onClick={metronomeActive ? () => setFeel(doubleFeel(feel)) : doubleManualBpm}
+                    aria-label={metronomeActive ? 'Double click rate' : 'Double tempo'}
+                    aria-pressed={metronomeActive ? feel > 1 : undefined}
+                    data-active={metronomeActive && feel > 1}
+                  >
+                    2×
+                  </button>
+                </div>
+                <div className="manual-metronome__nudge-row">
+                  <button
+                    type="button"
+                    className="pill-button pill-button--small"
+                    onClick={() => nudgeBpm(-1)}
+                    aria-label="Decrease tempo by 1 BPM"
+                  >
+                    −1
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-button pill-button--small"
+                    onClick={() => nudgeBpm(1)}
+                    aria-label="Increase tempo by 1 BPM"
+                  >
+                    +1
+                  </button>
+                </div>
+                {metronomeActive && (
+                  <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
+                    {feel === 1
+                      ? 'Tap ½× or 2× to change feel live — each press doubles or halves again.'
+                      : `${formatFeel(feel)} feel active — same tempo underneath.`}
+                  </p>
+                )}
+                <input
+                  type="range"
+                  aria-label="Manual tempo slider"
+                  min={settings.minBpm}
+                  max={settings.maxBpm}
+                  step={1}
+                  value={manualBpm}
+                  onChange={(e) => setManualBpm(Number(e.target.value))}
+                />
+                <button
+                  type="button"
+                  className={`big-button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
+                  onClick={metronomeActive ? stopMetronome : playManualClick}
+                >
+                  {metronomeActive ? 'Stop Click' : 'Play Click'}
+                </button>
+              </div>
+            ),
+          };
+
+          return mainSectionOrder.map((id, index) => (
+            <div
+              key={id}
+              className="main-section"
+              data-dragging={mainDraggingIndex === index}
+              draggable
+              onDragStart={() => setMainDraggingIndex(index)}
+              onDragEnd={() => setMainDraggingIndex(null)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (mainDraggingIndex !== null && mainDraggingIndex !== index) {
+                  reorderMainSections(mainDraggingIndex, index);
+                }
+                setMainDraggingIndex(null);
+              }}
+            >
+              <div className="main-section__handle">
+                <span className="main-section__grip" aria-hidden="true">
+                  ⠿
+                </span>
+                <span className="main-section__title">{MAIN_SECTION_TITLES[id]}</span>
+                <div className="main-section__reorder">
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderMainSections(index, index - 1)}
+                    disabled={index === 0}
+                    aria-label={`Move ${MAIN_SECTION_TITLES[id]} up`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderMainSections(index, index + 1)}
+                    disabled={index === mainSectionOrder.length - 1}
+                    aria-label={`Move ${MAIN_SECTION_TITLES[id]} down`}
+                  >
+                    ▼
+                  </button>
+                </div>
+              </div>
+              <div className="main-section__body">{mainSectionContent[id]}</div>
             </div>
-            <select
-              id="accent-mode-main"
-              value={settings.accentMode}
-              onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
-            >
-              {ACCENT_MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="manual-metronome__bpm-row">
-            <button
-              type="button"
-              className="pill-button"
-              onClick={metronomeActive ? () => setFeel(halveFeel(feel)) : halveManualBpm}
-              aria-label={metronomeActive ? 'Halve click rate' : 'Halve tempo'}
-              aria-pressed={metronomeActive ? feel < 1 : undefined}
-              data-active={metronomeActive && feel < 1}
-            >
-              ½×
-            </button>
-            <div className="manual-metronome__bpm">
-              <input
-                type="number"
-                aria-label="Manual tempo in beats per minute"
-                min={settings.minBpm}
-                max={settings.maxBpm}
-                value={manualBpm}
-                onChange={(e) => setManualBpm(Number(e.target.value))}
-              />
-              <span aria-hidden="true">BPM</span>
-            </div>
-            <button
-              type="button"
-              className="pill-button"
-              onClick={metronomeActive ? () => setFeel(doubleFeel(feel)) : doubleManualBpm}
-              aria-label={metronomeActive ? 'Double click rate' : 'Double tempo'}
-              aria-pressed={metronomeActive ? feel > 1 : undefined}
-              data-active={metronomeActive && feel > 1}
-            >
-              2×
-            </button>
-          </div>
-          {metronomeActive && (
-            <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
-              {feel === 1
-                ? 'Tap ½× or 2× to change feel live — each press doubles or halves again.'
-                : `${formatFeel(feel)} feel active — same tempo underneath.`}
-            </p>
-          )}
-          <input
-            type="range"
-            aria-label="Manual tempo slider"
-            min={settings.minBpm}
-            max={settings.maxBpm}
-            step={1}
-            value={manualBpm}
-            onChange={(e) => setManualBpm(Number(e.target.value))}
-          />
-          <button
-            type="button"
-            className={`big-button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
-            onClick={metronomeActive ? stopMetronome : playManualClick}
-          >
-            {metronomeActive ? 'Stop Click' : 'Play Click'}
-          </button>
-        </div>
+          ));
+        })()}
         </section>
 
         <div className="setlist">

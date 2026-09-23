@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (192 tests as of this build).
+Run `npm run test` for the full suite (198 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,68 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Main screen reorderable, real-screenshot fixes (this build)**: from a
+  screenshot of the app in actual use — the four main-screen blocks
+  below the BPM readout (Detection Mode, Listen, Tap Tempo, Click Track)
+  are now drag-to-reorder, same pattern as Settings sections, with the
+  handle and Move Up/Down buttons at the top of each block as requested.
+  The BPM readout itself stays fixed at the top, anchoring the page.
+  Also fixed a real bug visible in that screenshot: the BPM number
+  ("107.5") was clipping off the left edge of the screen — the font
+  sizing (30vw) was tuned before decimal display was added and could
+  overflow for anything wider than a 3-digit whole number. Resized with
+  a `clamp()` that reliably fits a full "199.9"-length reading. Also
+  added a bit more top clearance in the header, since iOS draws its own
+  transient "microphone active" overlay over page content while
+  listening — a best-effort mitigation, not a guaranteed fix, since that
+  overlay is outside what page CSS can fully control.
+- **Auto-start bar count moved to the main screen (this build)**: same
+  treatment as Click mode — "Auto-start after" (Off/1/2/4 bars) is now
+  next to the mode toggle on the main screen, not buried in Settings.
+- **2 & 4 clap count-in moved to the main screen (this build)**: the
+  "Count-in before the clap starts" option now appears directly under
+  Click mode on the main screen when 2 & 4 Clap is selected, instead of
+  in Settings.
+- **Subdivision/feel ticks use the actual kit sound (this build)**: extra
+  ticks — from the static Subdivision setting or from the live 2×/4×/8×
+  feel toggle — now play the selected sound kit's own normal voice
+  (Kick, Snare, whichever is chosen) instead of a fixed generic tone, so
+  they sound consistent with the main click rather than an unrelated
+  beep.
+- **Live BPM display + tempo nudge (this build)**: the BPM number between
+  ½× and 2× now shows the click's actual live tempo while it's playing
+  (read-only; becomes the editable dial again once stopped). New −1/+1
+  buttons below it nudge the tempo by exactly 1 BPM — live, with no
+  restart, while a click is running, or just the pre-play dial when it
+  isn't.
+- **First-click catch-up (this build)**: the phase-alignment fix above
+  computes an *exact* bar-boundary instant for the click to start on, but
+  the code deciding when to trigger it reacts on a ~150ms polling
+  interval, not instantly — so by the time it actually calls start(),
+  that exact instant can already be a little in the past. The engine was
+  treating that like any other late click (silently dropped, waiting for
+  the next beat), which meant occasionally skipping straight to beat 2 —
+  audible as a brief pause before the click "caught on." Now, only for
+  the very first click of a session, if it's already passed by the time
+  it's scheduled, it plays right away instead of waiting a full beat. The
+  bar/beat grid itself is unaffected — only that one click's audible
+  timing gets nudged if needed; everything after stays on the original,
+  correctly-aligned schedule.
+- **Bar countdown phase-aligned to the actual first hit (this build)**: a
+  request to make sure the click starts exactly at the start of the bar
+  after the N-bar count-in (bar 2 for a 1-bar count, bar 3 for 2 bars)
+  surfaced a real gap: the countdown was starting from whenever the
+  detector first produced a tempo reading, not from when the player
+  actually started playing. Detection needs several onsets (currently 6)
+  to accumulate before it can estimate a tempo at all, so that first
+  reading can already be a beat or more into the bar the player started
+  on — meaning the N-bar count wasn't counting from true bar 1. The
+  countdown now anchors to the time of the very first onset detected
+  this session (assumed to be the downbeat) instead, so the click lands
+  exactly N bars after the actual first hit. Covered by 5 new tests in
+  `metronomeSchedule.test.ts`; a genuine mid-song tempo change still
+  resets the countdown using the current time as before, since there's
+  no reliable "first onset of the new tempo" to anchor to there.
 - **Hard lock after auto-start (this build)**: for real gig use — count
   in, play the confirming bars, the app locks the tempo, and it should
   never move again until you stop it — detection now fully stops

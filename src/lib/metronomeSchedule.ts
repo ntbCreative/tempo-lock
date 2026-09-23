@@ -23,6 +23,13 @@
 
 export type BarCount = 0 | 1 | 2 | 4; // 0 = feature off
 
+export const BAR_COUNT_OPTIONS: { label: string; value: BarCount }[] = [
+  { label: 'Off', value: 0 },
+  { label: 'After 1 bar', value: 1 },
+  { label: 'After 2 bars', value: 2 },
+  { label: 'After 4 bars', value: 4 },
+];
+
 export interface BarCountdownConfig {
   barsRequired: BarCount;
   beatsPerBar: number;
@@ -66,13 +73,16 @@ function noTrigger(state: BarCountdownState): BarCountdownResult {
 /**
  * Advance the countdown by one detector snapshot: the currently displayed
  * BPM (null if the detector hasn't settled on a tempo at all yet) and the
- * current wall-clock time (seconds).
+ * current wall-clock time (seconds). `anchorTimeSec`, if given, is used
+ * only when a *fresh* countdown starts (see below) -- it does not affect
+ * the ongoing elapsed-time check on later ticks.
  */
 export function updateBarCountdown(
   state: BarCountdownState,
   displayedBpm: number | null,
   nowSec: number,
-  configOverrides: Partial<BarCountdownConfig> = {}
+  configOverrides: Partial<BarCountdownConfig> = {},
+  anchorTimeSec: number | null = null
 ): BarCountdownResult {
   const cfg = { ...DEFAULT_BAR_COUNTDOWN_CONFIG, ...configOverrides };
 
@@ -82,8 +92,16 @@ export function updateBarCountdown(
   }
 
   if (state.lockStartTimeSec === null) {
-    // A tempo reading just appeared: start the countdown.
-    return noTrigger({ lockStartTimeSec: nowSec, lockStartBpm: displayedBpm, triggered: false });
+    // A tempo reading just appeared: start the countdown. Detection needs
+    // several onsets to accumulate before it can estimate a tempo at all,
+    // so by the time a reading first appears, "now" can already be a beat
+    // or more into whatever bar the player actually started on.
+    // anchorTimeSec (typically the time of the very first onset this
+    // session) keeps the N-bar count phase-aligned to the bar grid
+    // actually being played, on the reasonable assumption that the first
+    // hit played is the downbeat -- rather than to the detector's own
+    // acquisition delay. Falls back to nowSec when no anchor is available.
+    return noTrigger({ lockStartTimeSec: anchorTimeSec ?? nowSec, lockStartBpm: displayedBpm, triggered: false });
   }
 
   if (state.triggered) {
