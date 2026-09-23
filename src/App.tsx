@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useTempoDetector } from './hooks/useTempoDetector';
 import { doubleFeel, halveFeel } from './lib/feel';
-import { ACCENT_MODE_OPTIONS, type AccentMode } from './lib/clickPattern';
+import { ACCENT_MODE_OPTIONS, SUBDIVISION_OPTIONS, type AccentMode, type Subdivision } from './lib/clickPattern';
 import { BAR_COUNT_OPTIONS, type BarCount } from './lib/metronomeSchedule';
 import type { MainSectionId } from './hooks/useTempoDetector';
 import Settings from './Settings';
@@ -208,17 +208,20 @@ function App() {
         </div>
 
         {isListening && (
-          <p className="notice notice--diagnostic">
-            {engineState.onsetCount} onsets · {confidencePercent}% confidence · {signalPercent}% signal
-            {engineState.candidates.length > 0 && (
-              <>
-                {' · candidates: '}
-                {engineState.candidates
-                  .map((c) => `${Math.round(c.bpm)} (${Math.round(c.score * 100)}%, n=${c.supportCount})`)
-                  .join(', ')}
-              </>
-            )}
-          </p>
+          <details className="diagnostics-disclosure">
+            <summary>Diagnostics</summary>
+            <p className="notice notice--diagnostic">
+              {engineState.onsetCount} onsets · {confidencePercent}% confidence · {signalPercent}% signal
+              {engineState.candidates.length > 0 && (
+                <>
+                  {' · candidates: '}
+                  {engineState.candidates
+                    .map((c) => `${Math.round(c.bpm)} (${Math.round(c.score * 100)}%, n=${c.supportCount})`)
+                    .join(', ')}
+                </>
+              )}
+            </p>
+          </details>
         )}
 
         {isListening && settings.metronomeBars > 0 && !metronomeActive && (
@@ -226,6 +229,14 @@ function App() {
             {continuity.status === 'locked' || continuity.status === 'low-confidence'
               ? `Counting in… click track starts after ${settings.metronomeBars} bar${settings.metronomeBars > 1 ? 's' : ''}`
               : 'Play steadily to start the count-in'}
+          </p>
+        )}
+
+        {isListening && settings.metronomeBars === -1 && !metronomeActive && (
+          <p className="notice notice--metronome">
+            {continuity.status === 'locked' || continuity.status === 'low-confidence'
+              ? 'Waiting for a steady, consistent tempo before starting the click…'
+              : 'Play steadily to start the click'}
           </p>
         )}
 
@@ -337,6 +348,23 @@ function App() {
                     onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
                   >
                     {ACCENT_MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="control click-mode-control">
+                  <div className="control__label-row">
+                    <label htmlFor="subdivision-main">Subdivision</label>
+                  </div>
+                  <select
+                    id="subdivision-main"
+                    value={settings.subdivision}
+                    onChange={(e) => updateSettings({ subdivision: e.target.value as Subdivision })}
+                  >
+                    {SUBDIVISION_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>

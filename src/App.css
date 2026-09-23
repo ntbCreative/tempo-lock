@@ -18,6 +18,13 @@
   --radius-lg: 24px;
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* Layered "physical button" shadow: a light top-edge bevel highlight, a
+     dark bottom-edge bevel, and a soft drop shadow lifting it off the
+     page -- reads as a raised, tactile hardware button rather than a
+     flat rectangle. Pressed state inverts to an inset shadow, like the
+     button is actually being pushed in. */
+  --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.28), 0 8px 16px rgba(0, 0, 0, 0.4);
+  --shadow-tactile-active: inset 0 2px 6px rgba(0, 0, 0, 0.4);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -306,6 +313,36 @@ body {
 .notice--diagnostic {
   color: var(--text-dim);
   font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Collapsed by default -- dense debugging detail, not something a
+   performing drummer needs taking up space next to the controls they're
+   actually reaching for. */
+.diagnostics-disclosure {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+.diagnostics-disclosure summary {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.diagnostics-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.diagnostics-disclosure summary::before {
+  content: '▸ ';
+}
+
+.diagnostics-disclosure[open] summary::before {
+  content: '▾ ';
 }
 
 .notice--locked {
@@ -322,20 +359,20 @@ body {
 .big-button {
   width: 100%;
   max-width: 420px;
-  padding: 20px;
+  padding: 26px;
   border-radius: var(--radius-md);
   border: none;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 140ms var(--ease), box-shadow 140ms var(--ease), filter 140ms var(--ease);
+  box-shadow: var(--shadow-tactile);
+  transition: transform 90ms var(--ease), box-shadow 90ms var(--ease), filter 140ms var(--ease);
 }
 
 .big-button:active {
-  transform: scale(0.98);
-  box-shadow: none;
+  transform: translateY(2px);
+  box-shadow: var(--shadow-tactile-active);
 }
 
 @media (hover: hover) {
@@ -347,7 +384,11 @@ body {
 .big-button--start {
   background: var(--accent);
   color: #1a1200;
-  box-shadow: var(--shadow-sm), 0 0 28px rgba(var(--accent-glow), 0.25);
+  box-shadow: var(--shadow-tactile), 0 0 28px rgba(var(--accent-glow), 0.25);
+}
+
+.big-button--start:active {
+  box-shadow: var(--shadow-tactile-active), 0 0 28px rgba(var(--accent-glow), 0.25);
 }
 
 .big-button--stop {
@@ -526,13 +567,13 @@ body {
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
+  box-shadow: var(--shadow-tactile);
+  transition: transform 90ms var(--ease), background 90ms var(--ease), box-shadow 90ms var(--ease);
 }
 
 .pill-button:active {
-  transform: scale(0.96);
-  box-shadow: none;
+  transform: translateY(2px);
+  box-shadow: var(--shadow-tactile-active);
 }
 
 .pill-button[data-active='true'] {

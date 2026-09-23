@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (210 tests as of this build).
+Run `npm run test` for the full suite (218 tests as of this build).
 
 ## Known real-world limitations
 
@@ -288,6 +288,53 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Subdivision moved to the main screen; diagnostics collapsed by
+  default (this build)**: everything you'd realistically reach for
+  mid-performance — turning the click on/off, adjusting tempo, nudging
+  it, and now picking a subdivision — lives on the main screen, next to
+  the click controls, not buried in Settings. The dense onset/confidence/
+  candidate-list diagnostic text (genuinely useful for debugging, not
+  something you need reaching over mid-song) is now tucked behind a small
+  collapsed "Diagnostics" disclosure instead of always taking up space
+  next to the controls that actually matter while playing. The
+  Confidence/Signal meter bars themselves stay visible as before — those
+  are a legitimate quick glance, just not the dense text underneath.
+- **Tactile, hardware-inspired buttons (this build)**: inspired by a
+  reference screenshot of a hardware-style performance app — every major
+  button (Start/Stop Listening, Play/Stop Click, Tap Tempo, ½×/2×, the
+  nudge buttons) is now bigger and reads as a raised, physical button
+  rather than a flat rectangle: a layered shadow gives it a bevel edge
+  and lift off the page, and pressing it now visibly pushes it in (an
+  inset shadow, plus a real downward shift) instead of just a subtle
+  scale-down. Purely visual — no functional changes.
+- **"Once stable" adaptive auto-start (this build)**: a new option
+  alongside (not replacing) the existing bar-count choices — instead of
+  guessing 1 vs 2 vs 3 vs 4 bars up front, this triggers as soon as the
+  detected tempo has genuinely settled, however long that takes. Reuses
+  the same stability tracking already built for the "lock gets harder to
+  dislodge over time" feature (`continuity.ts`'s `stableTicks` — updates
+  since the displayed tempo last committed a real change), requiring
+  roughly 2.25 seconds of continuous, uninterrupted stability before
+  triggering. Deliberately does not also require a specific confidence
+  label ('locked') on top of that, matching the existing bar-countdown's
+  own established reasoning: confidence dips constantly in a real band
+  mix even while the tempo reading itself holds steady, and requiring
+  both would undermine that same noise tolerance. The resulting click
+  still starts phase-aligned to the session's first-onset anchor, same
+  as the bar-count modes. No count-in in this mode, since there's no
+  fixed countdown length to count down through. 8 new tests in
+  `metronomeSchedule.test.ts`.
+- **Signal meter scaled per mode (this build)**: a screenshot showed a
+  100% confidence, real onset count, and a sensible candidate list — but
+  a 4% signal reading, from music playing through a stereo in Live mode.
+  The meter's scale was tuned for a close stick/kit hit; music from a
+  stereo across a room genuinely has a lower peak at the mic even when
+  detection is working correctly, since onset detection itself uses a
+  separate, adaptive threshold, not this fixed peak scale. Recording
+  mode now gets its own, more sensitive scale, so a healthy signal in
+  that mode doesn't read as alarmingly low for no real reason. Worth
+  reiterating: Recording mode (not Live) is the one built for exactly
+  this case — a full mix played through speakers.
 - **Nudge fix + autocorrelation cross-validation (this build)**: found
   and fixed why −1/+1 "reset to the main tempo" instead of sticking — if
   live tempo tracking was enabled, it kept blending the running click's

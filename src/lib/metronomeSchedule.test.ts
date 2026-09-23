@@ -6,6 +6,7 @@ import {
   computeSessionPosition,
   isDownbeat,
   blendTowards,
+  checkStabilityTrigger,
   type BarCountdownState,
 } from './metronomeSchedule';
 
@@ -291,5 +292,54 @@ describe('metronomeSchedule: blendTowards', () => {
 
   it('is a no-op when current already equals target', () => {
     expect(blendTowards(120, 120, 0.5)).toBe(120);
+  });
+});
+
+describe('metronomeSchedule: checkStabilityTrigger', () => {
+  it('does not trigger before stableTicks reaches the requirement', () => {
+    const result = checkStabilityTrigger(120, 5, 10, 100, 0, 4);
+    expect(result.shouldStartMetronome).toBe(false);
+    expect(result.metronomeBpm).toBeNull();
+    expect(result.metronomeStartTimeSec).toBeNull();
+  });
+
+  it('triggers once stableTicks reaches the requirement', () => {
+    const result = checkStabilityTrigger(120, 10, 10, 100, 0, 4);
+    expect(result.shouldStartMetronome).toBe(true);
+    expect(result.metronomeBpm).toBe(120);
+  });
+
+  it('does not trigger with no displayed tempo yet', () => {
+    const result = checkStabilityTrigger(null, 50, 10, 100, 0, 4);
+    expect(result.shouldStartMetronome).toBe(false);
+  });
+
+  it('does not trigger for a non-positive bpm', () => {
+    const result = checkStabilityTrigger(0, 50, 10, 100, 0, 4);
+    expect(result.shouldStartMetronome).toBe(false);
+  });
+
+  it('phase-aligns the start time to the next bar boundary from the anchor', () => {
+    // 120 BPM, 4/4: bar interval = 4 * 0.5s = 2s. Anchor at t=0, now at t=5
+    // (2.5 bars in) -> next bar boundary is t=6 (3 bars).
+    const result = checkStabilityTrigger(120, 10, 10, 5, 0, 4);
+    expect(result.metronomeStartTimeSec).toBeCloseTo(6, 5);
+  });
+
+  it('starts at least one bar after the anchor even if triggered almost immediately', () => {
+    // now === anchor: still should land at least one full bar later, not at t=0.
+    const result = checkStabilityTrigger(120, 10, 10, 0, 0, 4);
+    expect(result.metronomeStartTimeSec).toBeCloseTo(2, 5);
+  });
+
+  it('falls back to nowSec as the anchor when none is given', () => {
+    const result = checkStabilityTrigger(120, 10, 10, 10, null, 4);
+    expect(result.metronomeStartTimeSec).toBeCloseTo(12, 5);
+  });
+
+  it('treats an invalid beatsPerBar as 1 rather than breaking', () => {
+    const result = checkStabilityTrigger(120, 10, 10, 5, 0, 0);
+    expect(result.shouldStartMetronome).toBe(true);
+    expect(Number.isFinite(result.metronomeStartTimeSec)).toBe(true);
   });
 });

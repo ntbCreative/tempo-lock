@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
-import type { SoundKit, Subdivision } from './lib/clickPattern';
-import { SOUND_KITS, SUBDIVISION_OPTIONS } from './lib/clickPattern';
+import type { SoundKit } from './lib/clickPattern';
+import { SOUND_KITS } from './lib/clickPattern';
 import { THEMES, type ThemeId } from './lib/themes';
 import { createSilentWavDataUri } from './audio/silentAudio';
 
@@ -269,23 +269,7 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
         </p>
       </div>
 
-      <div className="control">
-        <div className="control__label-row">
-          <label htmlFor="subdivision">Subdivision</label>
-        </div>
-        <select
-          id="subdivision"
-          value={settings.subdivision}
-          onChange={(e) => updateSettings({ subdivision: e.target.value as Subdivision })}
-        >
-          {SUBDIVISION_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <p className="settings-note">Adds quiet ticks between the main beat clicks.</p>
-      </div>
+      <p className="settings-note">Subdivision now lives on the main screen too, next to the click controls.</p>
     </div>
   );
 }

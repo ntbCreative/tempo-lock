@@ -11,6 +11,7 @@ import { createContinuityState } from '../lib/continuity';
 import {
   createBarCountdownState,
   updateBarCountdown,
+  checkStabilityTrigger,
   type BarCount,
   type BarCountdownState,
 } from '../lib/metronomeSchedule';
@@ -185,6 +186,13 @@ export function useTempoDetector() {
   // silently undone. Reset whenever a fresh click session starts.
   const liveTrackingSuppressedRef = useRef(false);
 
+  // Tracks whether the "Once stable" adaptive auto-start (see
+  // checkStabilityTrigger) has already fired this listening session, so
+  // it only triggers once. Reset alongside autoStartSuppressedRef on a
+  // fresh session.
+  const stabilityTriggeredRef = useRef(false);
+  const REQUIRED_STABLE_TICKS = 15; // ~2.25s at the ~150ms analysis interval
+
   const clampBpm = useCallback(
     (bpm: number) => Math.min(settingsRef.current.maxBpm, Math.max(settingsRef.current.minBpm, bpm)),
     []
@@ -210,6 +218,7 @@ export function useTempoDetector() {
     metronomeEngineRef.current?.stop();
     countInEngineRef.current?.stop();
     barCountdownRef.current = createBarCountdownState();
+    stabilityTriggeredRef.current = false;
     setMetronomeActive(false);
     setMetronomeBpm(null);
     setFeelState(1);
@@ -277,6 +286,7 @@ export function useTempoDetector() {
             stopPositionPoll();
           }
           barCountdownRef.current = createBarCountdownState();
+          stabilityTriggeredRef.current = false;
           autoStartSuppressedRef.current = false; // a fresh session can always auto-start again
           return;
         }
@@ -288,6 +298,62 @@ export function useTempoDetector() {
         }
 
         const cfg = settingsRef.current;
+
+        const triggerMetronomeStart = (bpm: number, startTimeSec: number) => {
+          countInEngineRef.current?.stop();
+          if (!metronomeEngineRef.current) {
+            metronomeEngineRef.current = new MetronomeEngine();
+          }
+          metronomeEngineRef.current.start(bpm, startTimeSec, {
+            beatsPerBar: cfg.beatsPerBar,
+            accentMode: cfg.accentMode,
+            backbeatCountInBars: cfg.backbeatCountInBars,
+            customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
+            soundKit: cfg.soundKit,
+            subdivision: cfg.subdivision,
+            volumeScale: cfg.masterVolume,
+            timingOffsetMs: cfg.clickTimingOffsetMs,
+            totalBars: 0,
+          });
+          setMetronomeActive(true);
+          setMetronomeBpm(bpm);
+          setFeelState(1);
+          liveTrackingSuppressedRef.current = false;
+          startPositionPoll();
+          // Gig-ready: once a tempo has been confirmed and the click starts,
+          // stop re-evaluating entirely for the rest of this session -- a
+          // locked-in tempo drifting afterward, even silently, undermines
+          // the one thing this workflow needs to be trustworthy.
+          engineRef.current?.freeze();
+        };
+
+        if (cfg.metronomeBars === -1) {
+          // Adaptive "Once stable" auto-start: no fixed bar count, so no
+          // bar-countdown machinery and no count-in (there's no fixed
+          // length to count down through) -- just wait for the reading to
+          // genuinely settle, then start directly, phase-aligned to the
+          // session's first-onset anchor.
+          if (!stabilityTriggeredRef.current) {
+            const stabilityResult = checkStabilityTrigger(
+              state.continuity.displayedBpm,
+              state.continuity.stableTicks,
+              REQUIRED_STABLE_TICKS,
+              performance.now() / 1000,
+              state.firstOnsetTimeSec,
+              cfg.beatsPerBar
+            );
+            if (
+              stabilityResult.shouldStartMetronome &&
+              stabilityResult.metronomeBpm !== null &&
+              stabilityResult.metronomeStartTimeSec !== null
+            ) {
+              stabilityTriggeredRef.current = true;
+              triggerMetronomeStart(stabilityResult.metronomeBpm, stabilityResult.metronomeStartTimeSec);
+            }
+          }
+          return;
+        }
+
         const previousState = barCountdownRef.current;
 
         // While our own count-in audio is playing, don't let it (if the mic
@@ -334,31 +400,7 @@ export function useTempoDetector() {
         }
 
         if (result.shouldStartMetronome && result.metronomeBpm !== null && result.metronomeStartTimeSec !== null) {
-          countInEngineRef.current?.stop();
-          if (!metronomeEngineRef.current) {
-            metronomeEngineRef.current = new MetronomeEngine();
-          }
-          metronomeEngineRef.current.start(result.metronomeBpm, result.metronomeStartTimeSec, {
-            beatsPerBar: cfg.beatsPerBar,
-            accentMode: cfg.accentMode,
-            backbeatCountInBars: cfg.backbeatCountInBars,
-            customAccentBeats: parseCustomAccentBeats(cfg.customAccentBeatsInput, cfg.beatsPerBar),
-            soundKit: cfg.soundKit,
-            subdivision: cfg.subdivision,
-            volumeScale: cfg.masterVolume,
-            timingOffsetMs: cfg.clickTimingOffsetMs,
-            totalBars: 0,
-          });
-          setMetronomeActive(true);
-          setMetronomeBpm(result.metronomeBpm);
-          setFeelState(1);
-          liveTrackingSuppressedRef.current = false;
-          startPositionPoll();
-          // Gig-ready: once the count-in bars have confirmed a tempo and the
-          // click starts, stop re-evaluating entirely for the rest of this
-          // session -- a locked-in tempo drifting afterward, even silently,
-          // undermines the one thing this workflow needs to be trustworthy.
-          engineRef.current?.freeze();
+          triggerMetronomeStart(result.metronomeBpm, result.metronomeStartTimeSec);
         }
 
         // While a click track is already playing and the mic is still
@@ -474,6 +516,7 @@ export function useTempoDetector() {
       metronomeEngineRef.current = new MetronomeEngine();
     }
     barCountdownRef.current = createBarCountdownState();
+    stabilityTriggeredRef.current = false;
     countInEngineRef.current?.stop();
 
     const ramp: TempoRampConfig | undefined = cfg.rampEnabled

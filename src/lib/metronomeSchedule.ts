@@ -21,10 +21,11 @@
  * that decision into actual sound.
  */
 
-export type BarCount = 0 | 1 | 2 | 3 | 4; // 0 = feature off
+export type BarCount = -1 | 0 | 1 | 2 | 3 | 4; // -1 = trigger once stable, no fixed bar count; 0 = feature off
 
 export const BAR_COUNT_OPTIONS: { label: string; value: BarCount }[] = [
   { label: 'Off', value: 0 },
+  { label: 'Once stable (adaptive)', value: -1 },
   { label: 'After 1 bar', value: 1 },
   { label: 'After 2 bars', value: 2 },
   { label: 'After 3 bars', value: 3 },
@@ -188,4 +189,50 @@ export function computeSessionPosition(clickIndex: number, beatsPerBar: number, 
 export function blendTowards(current: number, target: number, factor: number): number {
   const safeFactor = Math.max(0, Math.min(1, factor));
   return current + (target - current) * safeFactor;
+}
+
+export interface StabilityTriggerResult {
+  shouldStartMetronome: boolean;
+  metronomeBpm: number | null;
+  metronomeStartTimeSec: number | null;
+}
+
+/**
+ * An alternative to the bar-count-based countdown above: instead of
+ * waiting for a fixed, guessed number of bars, trigger as soon as the
+ * detector has genuinely settled -- `stableTicks` (from continuity.ts:
+ * updates since the displayed tempo last committed a real change)
+ * reaching `requiredStableTicks`. Adaptive rather than fixed: a clean,
+ * unambiguous signal can trigger sooner; a harder one just takes longer,
+ * with no need to guess 1 vs 2 vs 4 bars up front.
+ *
+ * Deliberately does NOT also require a specific confidence/status label
+ * (e.g. 'locked') -- same reasoning as the bar-count countdown above:
+ * confidence dips constantly in a real mix even while the tempo reading
+ * itself holds steady, and stableTicks already only resets on a genuine
+ * value change, not a confidence wobble. Requiring 'locked' on top would
+ * undermine that same noise tolerance.
+ *
+ * The resulting start time is phase-aligned to the nearest bar boundary
+ * from `anchorTimeSec` (the session's first onset), same as the bar-count
+ * countdown, so the click still starts cleanly on a downbeat rather than
+ * at the arbitrary moment stability happened to be confirmed.
+ */
+export function checkStabilityTrigger(
+  displayedBpm: number | null,
+  stableTicks: number,
+  requiredStableTicks: number,
+  nowSec: number,
+  anchorTimeSec: number | null,
+  beatsPerBar: number
+): StabilityTriggerResult {
+  if (displayedBpm === null || displayedBpm <= 0 || stableTicks < requiredStableTicks) {
+    return { shouldStartMetronome: false, metronomeBpm: null, metronomeStartTimeSec: null };
+  }
+  const anchor = anchorTimeSec ?? nowSec;
+  const safeBeatsPerBar = beatsPerBar > 0 ? beatsPerBar : 1;
+  const barIntervalSec = (60 / displayedBpm) * safeBeatsPerBar;
+  const elapsedBars = Math.max(1, Math.ceil((nowSec - anchor) / barIntervalSec));
+  const startTimeSec = anchor + elapsedBars * barIntervalSec;
+  return { shouldStartMetronome: true, metronomeBpm: displayedBpm, metronomeStartTimeSec: startTimeSec };
 }

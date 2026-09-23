@@ -361,13 +361,21 @@ export class LiveTempoEngine {
     this.pendingSamples = combined.length > maxSamples ? combined.slice(combined.length - maxSamples) : combined;
 
     // Cheap running signal-level meter for the UI (peak of this chunk).
+    // Scaled per detection mode: Live's baseline assumes a close, sharp
+    // stick/kit hit (a peak around 0.25 reads as "full"). Recording mode
+    // picks up a full mix from a stereo across a room -- genuinely
+    // quieter at the mic even when detection is working fine, since
+    // onset detection itself uses a separate, adaptive threshold, not
+    // this fixed scale. Without a mode-aware scale, a perfectly healthy
+    // Recording-mode signal reads as alarmingly low for no real reason.
     let peak = 0;
     for (let i = 0; i < input.length; i++) {
       const abs = Math.abs(input[i]);
       if (abs > peak) peak = abs;
     }
     const sensitivityGain = 0.5 + this.options.sensitivity; // 0.5x .. 1.5x
-    const level = Math.max(0, Math.min(1, peak * 4 * sensitivityGain));
+    const modeGain = this.options.mode === 'recording' ? 2.5 : 1;
+    const level = Math.max(0, Math.min(1, peak * 4 * modeGain * sensitivityGain));
     this.emit({ signalLevel: level });
   }
 
