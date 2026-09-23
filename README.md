@@ -288,6 +288,36 @@ real kit has not been measured. In particular:
   when a Bluetooth mic is in use) could itself be a source of noisy,
   spurious onsets — worth confirming the input device is the phone/laptop's
   own mic, not a Bluetooth headset's, if this is still unreliable.
+- **Audio output latency compensation + manual timing offset (this
+  build)**: a report of the click being "displaced ever so slightly" —
+  correct tempo, just not landing exactly on the beat — pointed at
+  something genuinely different from everything fixed so far: the delay
+  between Web Audio scheduling a sound and it actually reaching the
+  speaker, which was never accounted for. The click now auto-compensates
+  using the browser's own `outputLatency`/`baseLatency` reporting where
+  available, scheduling every click that much earlier so it's audible
+  closer to the intended instant rather than technically-on-time-
+  internally-but-audibly-late. This can only correct what the browser
+  can actually measure, though — Bluetooth speakers and headphones
+  commonly add real delay (often 100ms+) that's completely invisible to
+  any web API, no way around that. For whatever that leaves, Settings →
+  Sounds → "Click timing" is a manual ±100ms slider to fine-tune by ear
+  for your specific hardware.
+- **Bigger nudge buttons (this build)**: −1/+1 now span the full width of
+  the manual-metronome block, side by side, with much larger touch
+  targets and text — meant to be hittable mid-performance without
+  looking closely.
+- **3-bar auto-start option (this build)**: "Auto-start after" now offers
+  1/2/3/4 bars, not just 1/2/4 — a genuine gap in the previous range.
+- **Mic permission requested on app open (this build)**: the browser's
+  permission prompt genuinely cannot be skipped or pre-authorized — no
+  page can bypass that, it's a hard security boundary, not a technical
+  limitation of this app. What's achievable: the app now requests (and
+  immediately releases) mic access as soon as it opens, rather than
+  waiting for Start Listening. That one-time browser prompt now happens
+  up front; since the resulting permission grant is normally remembered
+  per-origin, Start Listening itself typically won't prompt or wait on
+  anything by the time you actually need it.
 - **Main screen reorderable, real-screenshot fixes (this build)**: from a
   screenshot of the app in actual use — the four main-screen blocks
   below the BPM readout (Detection Mode, Listen, Tap Tempo, Click Track)

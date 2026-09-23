@@ -33,6 +33,8 @@ export interface MetronomeStartOptions {
   feel?: FeelMultiplier;
   totalBars?: number;
   volumeScale?: number;
+  /** Manual fine-tuning (milliseconds) added on top of automatic output-latency compensation -- positive plays the click earlier (for hardware whose real delay is worse than what the browser reports, e.g. Bluetooth), negative plays it later. See start()'s perfToAudioOffset computation for the full picture. */
+  timingOffsetMs?: number;
   ramp?: TempoRampConfig;
   onFinished?: () => void;
 }
@@ -137,7 +139,19 @@ export class MetronomeEngine {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
-    this.perfToAudioOffset = this.audioContext.currentTime - nowSeconds();
+    // Web Audio's own currentTime marks when the audio graph processes a
+    // sample, not when it's actually audible -- there's typically real
+    // additional delay from there to the speaker (DAC conversion, OS
+    // mixing, and especially Bluetooth, which can add 100ms+ that no web
+    // API can see at all). outputLatency, where supported, reports the
+    // known/queryable portion of that; subtracting it here means every
+    // click is scheduled that much earlier so it's actually *heard*
+    // closer to the intended instant, rather than a beat that's
+    // technically on-time internally but audibly late.
+    const latencyReportingContext = this.audioContext as unknown as { outputLatency?: number; baseLatency?: number };
+    const outputLatencySec = latencyReportingContext.outputLatency ?? latencyReportingContext.baseLatency ?? 0;
+    const manualOffsetSec = (options.timingOffsetMs ?? 0) / 1000;
+    this.perfToAudioOffset = this.audioContext.currentTime - nowSeconds() - outputLatencySec - manualOffsetSec;
     this.noiseBuffer = this.buildNoiseBuffer(this.audioContext);
 
     this.bpm = bpm;

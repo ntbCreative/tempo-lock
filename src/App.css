@@ -463,13 +463,22 @@ body {
 
 .manual-metronome__nudge-row {
   display: flex;
-  justify-content: center;
+  width: 100%;
+  max-width: 420px;
   gap: 12px;
 }
 
 .pill-button--small {
   padding: 8px 20px;
   font-size: 14px;
+}
+
+/* Deliberately large -- these need to be hittable without looking, mid-performance. */
+.pill-button--nudge {
+  flex: 1;
+  padding: 22px;
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .mode-toggle {

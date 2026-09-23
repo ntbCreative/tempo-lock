@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LiveTempoEngine, isMicrophoneSupported, type EngineState, type DetectionMode } from '../audio/liveTempoEngine';
+import {
+  LiveTempoEngine,
+  isMicrophoneSupported,
+  requestMicrophonePermissionEarly,
+  type EngineState,
+  type DetectionMode,
+} from '../audio/liveTempoEngine';
 import { MetronomeEngine, type MetronomePosition } from '../audio/metronomeEngine';
 import { createContinuityState } from '../lib/continuity';
 import {
@@ -53,6 +59,8 @@ export interface DetectorSettings {
   subdivision: Subdivision;
   /** Overall click track volume, 0-1. Applies to both auto-triggered and manual clicks; the count-in's own quieter volume is relative to this. */
   masterVolume: number;
+  /** Manual timing fine-tune (ms) on top of automatic output-latency compensation -- positive plays the click earlier, for hardware (e.g. Bluetooth) whose real output delay is worse than the browser can report. */
+  clickTimingOffsetMs: number;
   countInEnabled: boolean;
   countInVolume: number;
   rampEnabled: boolean;
@@ -85,6 +93,7 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   soundKit: 'digital',
   subdivision: 'none',
   masterVolume: 1,
+  clickTimingOffsetMs: 0,
   countInEnabled: true,
   countInVolume: 0.35,
   rampEnabled: false,
@@ -210,6 +219,15 @@ export function useTempoDetector() {
     settingsRef.current = settings;
   }, [settings]);
 
+  // Request mic permission as soon as the app opens rather than waiting
+  // for Start Listening -- the browser's own permission prompt can't be
+  // skipped, but front-loading it here means it's already resolved by
+  // the time Start Listening is actually pressed, instead of prompting
+  // (and waiting on the person) at that moment.
+  useEffect(() => {
+    requestMicrophonePermissionEarly();
+  }, []);
+
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, serializeSettings(settings));
   }, [settings]);
@@ -302,6 +320,7 @@ export function useTempoDetector() {
               subdivision: cfg.subdivision,
               totalBars: cfg.metronomeBars,
               volumeScale: cfg.masterVolume * cfg.countInVolume,
+              timingOffsetMs: cfg.clickTimingOffsetMs,
             });
           }
         }
@@ -319,6 +338,7 @@ export function useTempoDetector() {
             soundKit: cfg.soundKit,
             subdivision: cfg.subdivision,
             volumeScale: cfg.masterVolume,
+            timingOffsetMs: cfg.clickTimingOffsetMs,
             totalBars: 0,
           });
           setMetronomeActive(true);
@@ -463,6 +483,7 @@ export function useTempoDetector() {
       soundKit: cfg.soundKit,
       subdivision: cfg.subdivision,
       volumeScale: cfg.masterVolume,
+      timingOffsetMs: cfg.clickTimingOffsetMs,
       totalBars: cfg.clickTrackLengthBars,
       ramp,
       onFinished: () => {

@@ -21,12 +21,13 @@
  * that decision into actual sound.
  */
 
-export type BarCount = 0 | 1 | 2 | 4; // 0 = feature off
+export type BarCount = 0 | 1 | 2 | 3 | 4; // 0 = feature off
 
 export const BAR_COUNT_OPTIONS: { label: string; value: BarCount }[] = [
   { label: 'Off', value: 0 },
   { label: 'After 1 bar', value: 1 },
   { label: 'After 2 bars', value: 2 },
+  { label: 'After 3 bars', value: 3 },
   { label: 'After 4 bars', value: 4 },
 ];
 

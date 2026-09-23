@@ -403,19 +403,19 @@ function App() {
                 <div className="manual-metronome__nudge-row">
                   <button
                     type="button"
-                    className="pill-button pill-button--small"
+                    className="pill-button pill-button--nudge"
                     onClick={() => nudgeBpm(-1)}
                     aria-label="Decrease tempo by 1 BPM"
                   >
-                    −1
+                    −1 BPM
                   </button>
                   <button
                     type="button"
-                    className="pill-button pill-button--small"
+                    className="pill-button pill-button--nudge"
                     onClick={() => nudgeBpm(1)}
                     aria-label="Increase tempo by 1 BPM"
                   >
-                    +1
+                    +1 BPM
                   </button>
                 </div>
                 {metronomeActive && (

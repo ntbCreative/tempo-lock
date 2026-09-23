@@ -223,6 +223,32 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
 
       <div className="control">
         <div className="control__label-row">
+          <label htmlFor="timing-offset">Click timing</label>
+          <span>
+            {settings.clickTimingOffsetMs === 0
+              ? 'On time'
+              : `${settings.clickTimingOffsetMs > 0 ? '+' : ''}${settings.clickTimingOffsetMs}ms`}
+          </span>
+        </div>
+        <input
+          id="timing-offset"
+          type="range"
+          min={-100}
+          max={100}
+          step={5}
+          value={settings.clickTimingOffsetMs}
+          onChange={(e) => updateSettings({ clickTimingOffsetMs: Number(e.target.value) })}
+        />
+        <p className="settings-note">
+          The app already auto-compensates for the delay between scheduling a click and it actually reaching your
+          speakers, where the browser can measure it. Bluetooth speakers and headphones often add real delay the
+          browser can't see at all. If the click sounds slightly late (displaced) against what you're playing,
+          raise this. If it sounds early, lower it.
+        </p>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
           <label htmlFor="sound-kit">Click sound</label>
         </div>
         <select

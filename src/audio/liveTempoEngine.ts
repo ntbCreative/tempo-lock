@@ -94,6 +94,28 @@ export function isMicrophoneSupported(): boolean {
   );
 }
 
+/**
+ * Requests microphone permission immediately and releases the stream right
+ * away, without actually starting to listen. The browser's own permission
+ * prompt can never be skipped entirely -- no page can pre-authorize mic
+ * access without it -- but the grant it produces is normally remembered
+ * per-origin, so triggering that one-time prompt as soon as the app opens
+ * (rather than waiting for Start Listening) means Start Listening itself
+ * usually won't re-prompt or have to wait on anything. Safe to call
+ * speculatively: resolves quietly either way, and a denial here doesn't
+ * count against the person -- they'll just see the same permission-denied
+ * state as before if they later press Start Listening.
+ */
+export async function requestMicrophonePermissionEarly(): Promise<void> {
+  if (!isMicrophoneSupported()) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+  } catch {
+    // Denied or unavailable -- fine, this was just a head start attempt.
+  }
+}
+
 export class LiveTempoEngine {
   private options: EngineOptions;
   private audioContext: AudioContext | null = null;
