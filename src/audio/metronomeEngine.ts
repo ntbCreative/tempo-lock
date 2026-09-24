@@ -163,6 +163,18 @@ export class MetronomeEngine {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
+    // A manually-pressed "Play Click" is a direct tap -- a genuine user
+    // gesture, which browsers reliably let create and run an AudioContext.
+    // An auto-triggered click fires from inside a background analysis
+    // callback, not a tap -- no direct gesture at that exact moment, even
+    // though the original "Start Listening" press was one. Browsers
+    // (iOS Safari especially) can silently suspend a context created
+    // outside a direct gesture, sometimes after letting one already-
+    // scheduled sound through first -- which looks exactly like "plays
+    // once, then goes silent." Explicitly resuming covers that; it's a
+    // harmless no-op if the context is already running (e.g. the manual-
+    // click case).
+    this.audioContext.resume().catch(() => undefined);
     // Web Audio's own currentTime marks when the audio graph processes a
     // sample, not when it's actually audible -- there's typically real
     // additional delay from there to the speaker (DAC conversion, OS
@@ -236,6 +248,14 @@ export class MetronomeEngine {
 
   private scheduleUpcomingClicks(): void {
     if (!this.audioContext || !this.running) return;
+
+    // Defensive: if the context got suspended mid-session (phone
+    // backgrounded briefly, an audio-session interruption like a phone
+    // call, etc.), keep trying to bring it back rather than silently
+    // going mute for the rest of the session.
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => undefined);
+    }
 
     const horizonPerfSec = nowSeconds() + LOOKAHEAD_SEC;
 

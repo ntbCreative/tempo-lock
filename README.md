@@ -307,6 +307,21 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Auto-start plays one click then goes silent — fixed (this build)**: a
+  report that manual Play Click worked fine but auto-start played exactly
+  one click and then nothing pointed at something specific to *how* each
+  one starts, not the trigger logic itself (which was traced through in
+  full and is correctly guarded against re-firing). Manual Play Click is
+  a direct button tap — a genuine user gesture, which browsers reliably
+  let create and run an AudioContext. An auto-triggered click fires from
+  inside a background analysis callback instead, with no direct gesture
+  at that exact moment — and browsers, iOS Safari especially, can
+  silently suspend a context created that way, sometimes after letting
+  one already-scheduled sound through first. That matches the symptom
+  exactly. Now explicitly resumes the context on creation, and
+  defensively rechecks on every scheduling tick in case it gets
+  suspended mid-session (phone backgrounded briefly, a call coming in,
+  etc.) rather than silently staying mute for the rest of the session.
 - **Phase nudge fixed and made noticeable (this build)**: a report that
   it "does not work or is not noticeable" was likely both — the
   mechanism itself was working (it takes effect within about a beat,
