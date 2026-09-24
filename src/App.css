@@ -169,7 +169,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
   padding: 12px 24px 24px;
 }
 
@@ -181,7 +181,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 28px;
   min-height: 55vh;
 }
 
@@ -472,8 +472,21 @@ body {
 .manual-metronome {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   margin-top: 8px;
+}
+
+/* A visual break between the mode-selection controls (Click mode,
+   Subdivision, Count-in) above and the performance controls (tempo,
+   feel, nudges, Play/Stop) below -- two genuinely different groups,
+   more like the reference hardware app's clearly demarcated panels. */
+.manual-metronome__divider {
+  width: 100%;
+  max-width: 420px;
+  height: 1px;
+  background: var(--line);
+  border: none;
+  margin: 2px 0;
 }
 
 .manual-metronome__bpm-row {
@@ -795,8 +808,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 16px;
+  padding: 20px 16px;
 }
 
 .settings-section__reorder {

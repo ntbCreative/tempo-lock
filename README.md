@@ -307,6 +307,22 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Phase nudge fixed and made noticeable (this build)**: a report that
+  it "does not work or is not noticeable" was likely both — the
+  mechanism itself was working (it takes effect within about a beat,
+  since already-scheduled audio can't be retroactively moved), but 10ms
+  per tap is genuinely hard to perceive, and there was no visible
+  confirmation it had registered at all. Increased to 25ms per tap, and
+  added a live "Timing: +25ms" readout next to the buttons so the nudge
+  is visibly confirmed even before it's audible, plus a note that it
+  takes about a beat to take effect, not instantly.
+- **More visual separation (this build)**: inspired by the same hardware-
+  app reference as the tactile buttons — more breathing room between the
+  main-screen sections, more padding inside each one, and a new divider
+  line within the Click Track section separating the mode-selection
+  controls (Click mode, Subdivision, Count-in) from the performance
+  controls below (tempo, feel, nudges, Play/Stop) — two genuinely
+  different groups that were blurring together before.
 - **Live phase nudge (this build)**: new "◂ Earlier" / "Later ▸" buttons,
   shown while a click is playing, for exactly "right tempo, just not
   quite landing on the beat" — shifts *when* the click plays by 10ms per

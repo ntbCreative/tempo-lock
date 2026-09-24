@@ -396,6 +396,8 @@ function App() {
                   </div>
                 )}
 
+                <hr className="manual-metronome__divider" />
+
                 <div className="manual-metronome__bpm-row">
                   <button
                     type="button"
@@ -454,24 +456,30 @@ function App() {
                   </button>
                 </div>
                 {metronomeActive && (
-                  <div className="manual-metronome__nudge-row">
-                    <button
-                      type="button"
-                      className="pill-button pill-button--nudge"
-                      onClick={() => nudgePhase(-10)}
-                      aria-label="Shift click 10 milliseconds earlier"
-                    >
-                      ◂ Earlier
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-button pill-button--nudge"
-                      onClick={() => nudgePhase(10)}
-                      aria-label="Shift click 10 milliseconds later"
-                    >
-                      Later ▸
-                    </button>
-                  </div>
+                  <>
+                    <div className="manual-metronome__nudge-row">
+                      <button
+                        type="button"
+                        className="pill-button pill-button--nudge"
+                        onClick={() => nudgePhase(-25)}
+                        aria-label="Shift click 25 milliseconds earlier"
+                      >
+                        ◂ Earlier
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-button pill-button--nudge"
+                        onClick={() => nudgePhase(25)}
+                        aria-label="Shift click 25 milliseconds later"
+                      >
+                        Later ▸
+                      </button>
+                    </div>
+                    <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }} aria-live="polite">
+                      Timing: {settings.clickTimingOffsetMs === 0 ? 'on time' : `${settings.clickTimingOffsetMs > 0 ? '+' : ''}${settings.clickTimingOffsetMs}ms`}
+                      {' · takes effect within about a beat, not instantly'}
+                    </p>
+                  </>
                 )}
                 {metronomeActive && (
                   <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
