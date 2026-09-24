@@ -307,6 +307,14 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Same AudioContext suspension fix applied to the mic engine (this
+  build)**: the click engine's fix from last build (explicit resume on
+  creation, defensive recheck on every tick) applies equally well to the
+  microphone's own AudioContext — it can suffer the same silent
+  suspension (phone backgrounded, a call coming in), which would mean
+  detection quietly stops working mid-session with no obvious error.
+  Same fix, same reasoning, extended to cover detection as well as the
+  click.
 - **Auto-start plays one click then goes silent — fixed (this build)**: a
   report that manual Play Click worked fine but auto-start played exactly
   one click and then nothing pointed at something specific to *how* each

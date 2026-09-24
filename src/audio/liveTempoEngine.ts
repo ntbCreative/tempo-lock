@@ -255,6 +255,11 @@ export class LiveTempoEngine {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
+    // Same reasoning as the click engine's resume() call: defends against
+    // the context silently going suspended (phone backgrounded, a call
+    // coming in, etc.), which would otherwise mean detection quietly
+    // stops working mid-session with no obvious error.
+    this.audioContext.resume().catch(() => undefined);
     this.audioToPerfOffset = nowSeconds() - this.audioContext.currentTime;
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
@@ -380,6 +385,16 @@ export class LiveTempoEngine {
   }
 
   private runAnalysis(): void {
+    // Defensive: keep the mic's AudioContext alive even if something
+    // (phone backgrounded, a call coming in, etc.) suspended it
+    // mid-session -- otherwise detection can silently stop working with
+    // no obvious error. Checked before the frozen early-return since the
+    // context should stay alive regardless of whether tempo re-evaluation
+    // is currently paused.
+    if (this.audioContext?.state === 'suspended') {
+      this.audioContext.resume().catch(() => undefined);
+    }
+
     if (this.frozen) return;
 
     const sampleRate = this.audioContext?.sampleRate || SAMPLE_RATE_HINT;
