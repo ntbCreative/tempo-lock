@@ -8,10 +8,10 @@ import Settings from './Settings';
 import './App.css';
 
 const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
-  mode: 'Detection Mode',
+  mode: 'Detection mode',
   start: 'Listen',
-  tap: 'Tap Tempo',
-  click: 'Click Track',
+  tap: 'Tap tempo',
+  click: 'Click track',
 };
 
 /** Formats a feel multiplier for display: 2 -> "2×", 0.5 -> "½×", 0.25 -> "¼×", 0.125 -> "⅛×". */

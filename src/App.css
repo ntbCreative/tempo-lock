@@ -1,9 +1,13 @@
 :root {
-  --bg: #08090a;
-  --bg-raised: #131517;
-  --line: #23262a;
-  --text: #f2f1ed;
-  --text-dim: #8b8f94;
+  /* An ink-navy black rather than a neutral gray-black -- reads as
+     considered rather than a generic dark-mode default, while keeping
+     the high contrast this app genuinely needs (read at a glance, from
+     a few feet away, on a stage). */
+  --bg: #10121a;
+  --bg-raised: #1a1d28;
+  --line: #262a38;
+  --text: #f4f5f7;
+  --text-dim: #8892a6;
   --red: #ff5a4e;
 
   /* Default theme: Amber */
@@ -16,39 +20,28 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-  /* Layered "physical button" shadow: a light top-edge bevel highlight, a
-     dark bottom-edge bevel, and a soft drop shadow lifting it off the
-     page -- reads as a raised, tactile hardware button rather than a
-     flat rectangle. Pressed state inverts to an inset shadow, like the
-     button is actually being pushed in. */
-  --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.28), 0 8px 16px rgba(0, 0, 0, 0.4);
-  --shadow-tactile-active: inset 0 2px 6px rgba(0, 0, 0, 0.4);
-  /* A genuinely dark "screen" color for the BPM readout and meters --
-     real hardware LCD/LED displays are black-screened even set into a
-     light-colored device body, which is the look being reached for here. */
-  --lcd-bg: #000000;
+  /* A flat, confident shadow system -- lift without the embossed/beveled
+     "hardware button" look. A precision instrument's surfaces are crisp,
+     not skeuomorphic. */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Light mode: independent of the accent color themes below -- either can
    combine with either. Softer shadows than dark mode, since the same
    shadow opacity that reads as subtle depth on a dark background looks
-   heavier/muddier on a light one. */
+   heavier/muddier on a light one. Warm paper rather than stark white. */
 [data-scheme='light'] {
-  --bg: #ece9e2;
+  --bg: #f6f5f1;
   --bg-raised: #ffffff;
-  --line: #d8d4ca;
-  --text: #201f1c;
-  --text-dim: #6b6862;
+  --line: #e3e0d8;
+  --text: #16181d;
+  --text-dim: #6b7080;
   --red: #d6362a;
 
-  --shadow-sm: 0 1px 4px rgba(32, 31, 28, 0.12);
-  --shadow-md: 0 6px 18px rgba(32, 31, 28, 0.16);
-  --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(32, 31, 28, 0.1), 0 4px 10px rgba(32, 31, 28, 0.18);
-  --shadow-tactile-active: inset 0 2px 5px rgba(32, 31, 28, 0.2);
-  --lcd-bg: #100f0c;
+  --shadow-sm: 0 1px 3px rgba(22, 24, 29, 0.1);
+  --shadow-md: 0 6px 18px rgba(22, 24, 29, 0.12);
 }
 
 [data-theme='cyan'] {
@@ -186,7 +179,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 40px;
   min-height: 55vh;
 }
 
@@ -196,33 +189,27 @@ body {
   gap: 12px;
   line-height: 1;
   max-width: 100%;
-  padding: 20px;
+  padding: 0 16px;
   overflow: hidden;
-  background: var(--lcd-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.6), var(--shadow-md);
 }
 
 .bpm-readout__value {
   font-family: 'DM Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-variant-numeric: tabular-nums;
   /* Sized to reliably fit a full "199.9"-length reading (5-6 chars with
-     the decimal), not just a bare 3-digit whole number -- the previous
-     30vw/168px sizing was tuned before decimal display was added and
-     could clip off the edge of the screen for anything wider than ~3
-     digits. */
-  font-size: clamp(44px, 17vw, 106px);
-  font-weight: 500;
+     the decimal), not just a bare 3-digit whole number. Bold weight and
+     plain color, no glow -- a precision instrument's readout is crisp,
+     not a neon sign; the scale and the accent color itself carry it. */
+  font-size: clamp(50px, 19vw, 116px);
+  font-weight: 700;
   color: var(--accent);
-  text-shadow: 0 0 60px rgba(var(--accent-glow), 0.35), 0 0 16px rgba(var(--accent-glow), 0.2);
   white-space: nowrap;
 }
 
 .bpm-readout__unit {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
 }
 
@@ -291,47 +278,25 @@ body {
 }
 
 .meter__track {
-  height: 10px;
-  border-radius: 4px;
-  background: var(--lcd-bg);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-  border: 1px solid var(--line);
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-raised);
   overflow: hidden;
 }
 
-/* Segmented LED-bar look instead of a smooth gradient fill -- a repeating
-   pattern of small lit/unlit blocks, matching the hardware VU-meter
-   aesthetic rather than a plain progress bar. */
 .meter__fill {
   height: 100%;
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--text-dim) 0px,
-    var(--text-dim) 6px,
-    transparent 6px,
-    transparent 9px
-  );
+  border-radius: 999px;
+  background: var(--text-dim);
   transition: width 200ms var(--ease);
 }
 
 .meter__fill--locked {
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--accent) 0px,
-    var(--accent) 6px,
-    transparent 6px,
-    transparent 9px
-  );
+  background: var(--accent);
 }
 
 .meter__fill--weak {
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--red) 0px,
-    var(--red) 6px,
-    transparent 6px,
-    transparent 9px
-  );
+  background: var(--red);
 }
 
 .meter__fill--finding {
@@ -414,13 +379,13 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: var(--shadow-tactile);
+  box-shadow: var(--shadow-sm);
   transition: transform 90ms var(--ease), box-shadow 90ms var(--ease), filter 140ms var(--ease);
 }
 
 .big-button:active {
-  transform: translateY(2px);
-  box-shadow: var(--shadow-tactile-active);
+  transform: scale(0.98);
+  box-shadow: none;
 }
 
 @media (hover: hover) {
@@ -432,11 +397,6 @@ body {
 .big-button--start {
   background: var(--accent);
   color: #1a1200;
-  box-shadow: var(--shadow-tactile), 0 0 28px rgba(var(--accent-glow), 0.25);
-}
-
-.big-button--start:active {
-  box-shadow: var(--shadow-tactile-active), 0 0 28px rgba(var(--accent-glow), 0.25);
 }
 
 .big-button--stop {
@@ -506,17 +466,17 @@ body {
   margin-top: 8px;
 }
 
-/* A visual break between the mode-selection controls (Click mode,
+/* A quiet visual break between the mode-selection controls (Click mode,
    Subdivision, Count-in) above and the performance controls (tempo,
-   feel, nudges, Play/Stop) below -- two genuinely different groups,
-   more like the reference hardware app's clearly demarcated panels. */
+   feel, nudges, Play/Stop) below -- two genuinely different groups. Used
+   once, deliberately, rather than bordering every block. */
 .manual-metronome__divider {
   width: 100%;
   max-width: 420px;
   height: 1px;
   background: var(--line);
   border: none;
-  margin: 2px 0;
+  margin: 6px 0;
 }
 
 .manual-metronome__bpm-row {
@@ -628,13 +588,13 @@ body {
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: var(--shadow-tactile);
+  box-shadow: var(--shadow-sm);
   transition: transform 90ms var(--ease), background 90ms var(--ease), box-shadow 90ms var(--ease);
 }
 
 .pill-button:active {
-  transform: translateY(2px);
-  box-shadow: var(--shadow-tactile-active);
+  transform: scale(0.96);
+  box-shadow: none;
 }
 
 .pill-button[data-active='true'] {
@@ -781,23 +741,17 @@ body {
 .settings-section__title {
   flex: 1;
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
-/* Reorderable main-screen sections -- same pattern as Settings sections
-   above, adapted for the main screen: the handle sits at the top of each
-   section, full width, matching the rest of the page's styling. */
+/* Reorderable main-screen sections. Deliberately NOT boxed cards --
+   structure comes from generous spacing and a quiet label, not borders
+   and shadows around every block. The drag handle stays functional but
+   visually minimal. */
 .main-section {
   width: 100%;
   max-width: 420px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: opacity 140ms var(--ease);
 }
 
 .main-section[data-dragging='true'] {
@@ -808,24 +762,22 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 0 2px 10px;
   cursor: grab;
-  background: var(--bg-raised);
 }
 
 .main-section__grip {
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 2px;
   user-select: none;
+  opacity: 0.6;
 }
 
 .main-section__title {
   flex: 1;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
@@ -839,7 +791,6 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 20px 16px;
 }
 
 .settings-section__reorder {
@@ -1033,10 +984,6 @@ body {
 
   .bpm-readout__value {
     font-size: clamp(36px, 14vh, 90px);
-  }
-
-  .bpm-readout {
-    padding: 10px 14px;
   }
 
   .bpm-readout__unit {

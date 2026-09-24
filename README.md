@@ -307,6 +307,28 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Full visual redesign: "precision instrument" instead of vintage
+  hardware (this build)**: a request for a genuinely different look — one
+  that reads as professional and easy to use, not just refined —
+  prompted a real design reconsideration, not another incremental pass.
+  The prior direction (LCD screen panel, segmented LED meters, heavily
+  embossed/beveled buttons, bordered cards around every section) was
+  retro-hardware pastiche, and structurally it was the generic
+  "boxes-with-borders-and-identical-shadows" pattern, not a considered
+  choice. New direction: a serious stopwatch or tuner pedal, not a
+  vintage synth — bold confident numerals, flat crisp surfaces, structure
+  from generous spacing and type-weight rather than borders around
+  everything. Concretely: a new ink-navy base palette (`--bg: #10121a`)
+  instead of neutral near-black; the BPM readout dropped its screen-panel
+  background and neon glow in favor of a bold 700-weight numeral doing
+  the work on its own; the meters are clean flat bars again, not
+  segmented LEDs; buttons lost their heavy embossed bevel shadows for a
+  flat, confident press state; and the main-screen sections and Settings
+  categories dropped their bordered-card treatment entirely — separation
+  now comes from space (the hero's internal gap grew from 28px to 40px)
+  and quiet, sentence-case labels, not boxes. All-caps section labels
+  were also dropped throughout (a generic-template tell) in favor of
+  plain sentence case.
 - **LCD-panel BPM readout and LED-style meters (this build)**: pushing
   the hardware-device aesthetic further — the BPM number now sits in an
   actual recessed "screen" panel (a genuinely dark background, bordered,

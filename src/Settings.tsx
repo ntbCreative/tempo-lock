@@ -22,7 +22,7 @@ const SIGNATURE_OPTIONS: { label: string; beatsPerBar: number }[] = [
 
 const SECTION_TITLES: Record<SettingsSectionId, string> = {
   detector: 'Detector',
-  clickTrack: 'Click Track',
+  clickTrack: 'Click track',
   sounds: 'Sounds',
   practice: 'Practice',
   appearance: 'Appearance',
