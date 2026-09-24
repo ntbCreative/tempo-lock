@@ -307,6 +307,17 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **LCD-panel BPM readout and LED-style meters (this build)**: pushing
+  the hardware-device aesthetic further — the BPM number now sits in an
+  actual recessed "screen" panel (a genuinely dark background, bordered,
+  with an inset shadow simulating depth) instead of floating directly on
+  the page background, the same way a real LCD display is set into a
+  device's body. The Confidence/Signal meters switched from a smooth
+  gradient fill to a segmented LED-bar look (small lit/unlit blocks),
+  matching real VU-meter hardware instead of reading as a plain progress
+  bar. Both work in light and dark mode — the screen panel stays
+  genuinely dark either way, since that's how real hardware displays
+  look regardless of the device body's color.
 - **Same AudioContext suspension fix applied to the mic engine (this
   build)**: the click engine's fix from last build (explicit resume on
   creation, defensive recheck on every tick) applies equally well to the

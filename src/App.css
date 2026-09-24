@@ -25,6 +25,10 @@
      button is actually being pushed in. */
   --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.28), 0 8px 16px rgba(0, 0, 0, 0.4);
   --shadow-tactile-active: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+  /* A genuinely dark "screen" color for the BPM readout and meters --
+     real hardware LCD/LED displays are black-screened even set into a
+     light-colored device body, which is the look being reached for here. */
+  --lcd-bg: #000000;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -44,6 +48,7 @@
   --shadow-md: 0 6px 18px rgba(32, 31, 28, 0.16);
   --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(32, 31, 28, 0.1), 0 4px 10px rgba(32, 31, 28, 0.18);
   --shadow-tactile-active: inset 0 2px 5px rgba(32, 31, 28, 0.2);
+  --lcd-bg: #100f0c;
 }
 
 [data-theme='cyan'] {
@@ -191,8 +196,12 @@ body {
   gap: 12px;
   line-height: 1;
   max-width: 100%;
-  padding: 0 16px;
+  padding: 20px;
   overflow: hidden;
+  background: var(--lcd-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.6), var(--shadow-md);
 }
 
 .bpm-readout__value {
@@ -203,7 +212,7 @@ body {
      30vw/168px sizing was tuned before decimal display was added and
      could clip off the edge of the screen for anything wider than ~3
      digits. */
-  font-size: clamp(48px, 18vw, 110px);
+  font-size: clamp(44px, 17vw, 106px);
   font-weight: 500;
   color: var(--accent);
   text-shadow: 0 0 60px rgba(var(--accent-glow), 0.35), 0 0 16px rgba(var(--accent-glow), 0.2);
@@ -282,26 +291,47 @@ body {
 }
 
 .meter__track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bg-raised);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  height: 10px;
+  border-radius: 4px;
+  background: var(--lcd-bg);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
+/* Segmented LED-bar look instead of a smooth gradient fill -- a repeating
+   pattern of small lit/unlit blocks, matching the hardware VU-meter
+   aesthetic rather than a plain progress bar. */
 .meter__fill {
   height: 100%;
-  border-radius: 999px;
-  background: var(--text-dim);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--text-dim) 0px,
+    var(--text-dim) 6px,
+    transparent 6px,
+    transparent 9px
+  );
   transition: width 200ms var(--ease);
 }
 
 .meter__fill--locked {
-  background: var(--accent);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--accent) 0px,
+    var(--accent) 6px,
+    transparent 6px,
+    transparent 9px
+  );
 }
 
 .meter__fill--weak {
-  background: var(--red);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--red) 0px,
+    var(--red) 6px,
+    transparent 6px,
+    transparent 9px
+  );
 }
 
 .meter__fill--finding {
@@ -1003,6 +1033,10 @@ body {
 
   .bpm-readout__value {
     font-size: clamp(36px, 14vh, 90px);
+  }
+
+  .bpm-readout {
+    padding: 10px 14px;
   }
 
   .bpm-readout__unit {
