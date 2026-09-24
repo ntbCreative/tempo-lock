@@ -28,6 +28,24 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Light mode: independent of the accent color themes below -- either can
+   combine with either. Softer shadows than dark mode, since the same
+   shadow opacity that reads as subtle depth on a dark background looks
+   heavier/muddier on a light one. */
+[data-scheme='light'] {
+  --bg: #ece9e2;
+  --bg-raised: #ffffff;
+  --line: #d8d4ca;
+  --text: #201f1c;
+  --text-dim: #6b6862;
+  --red: #d6362a;
+
+  --shadow-sm: 0 1px 4px rgba(32, 31, 28, 0.12);
+  --shadow-md: 0 6px 18px rgba(32, 31, 28, 0.16);
+  --shadow-tactile: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(32, 31, 28, 0.1), 0 4px 10px rgba(32, 31, 28, 0.18);
+  --shadow-tactile-active: inset 0 2px 5px rgba(32, 31, 28, 0.2);
+}
+
 [data-theme='cyan'] {
   --accent: #4fd8e0;
   --accent-dim: #1f4a4c;

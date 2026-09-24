@@ -52,6 +52,8 @@ function App() {
     updateSettings,
     theme,
     setTheme,
+    colorScheme,
+    setColorScheme,
     sectionOrder,
     reorderSections,
     mainSectionOrder,
@@ -71,6 +73,7 @@ function App() {
     halveManualBpm,
     doubleManualBpm,
     nudgeBpm,
+    nudgePhase,
     feel,
     setFeel,
     playManualClick,
@@ -90,6 +93,10 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-scheme', colorScheme);
+  }, [colorScheme]);
 
   const isListening = engineState.status === 'listening';
   const { continuity } = engineState;
@@ -447,6 +454,26 @@ function App() {
                   </button>
                 </div>
                 {metronomeActive && (
+                  <div className="manual-metronome__nudge-row">
+                    <button
+                      type="button"
+                      className="pill-button pill-button--nudge"
+                      onClick={() => nudgePhase(-10)}
+                      aria-label="Shift click 10 milliseconds earlier"
+                    >
+                      ◂ Earlier
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-button pill-button--nudge"
+                      onClick={() => nudgePhase(10)}
+                      aria-label="Shift click 10 milliseconds later"
+                    >
+                      Later ▸
+                    </button>
+                  </div>
+                )}
+                {metronomeActive && (
                   <p className="settings-note" style={{ textAlign: 'center', marginTop: -4 }}>
                     {feel === 1
                       ? 'Tap ½× or 2× to change feel live — each press doubles or halves again.'
@@ -580,6 +607,8 @@ function App() {
           updateSettings={updateSettings}
           theme={theme}
           setTheme={setTheme}
+          colorScheme={colorScheme}
+          setColorScheme={setColorScheme}
           sectionOrder={sectionOrder}
           reorderSections={reorderSections}
           onClose={() => setSettingsOpen(false)}

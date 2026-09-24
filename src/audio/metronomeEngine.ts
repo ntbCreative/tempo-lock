@@ -33,6 +33,8 @@ export interface MetronomeStartOptions {
   feel?: FeelMultiplier;
   totalBars?: number;
   volumeScale?: number;
+  /** Extra multiplier for subdivision/feel-toggle ticks only, on top of volumeScale -- 1 = same volume as the main click's normal (unaccented) voice. */
+  subdivisionVolumeScale?: number;
   /** Manual fine-tuning (milliseconds) added on top of automatic output-latency compensation -- positive plays the click earlier (for hardware whose real delay is worse than what the browser reports, e.g. Bluetooth), negative plays it later. See start()'s perfToAudioOffset computation for the full picture. */
   timingOffsetMs?: number;
   ramp?: TempoRampConfig;
@@ -66,6 +68,8 @@ export class MetronomeEngine {
   private soundKit: SoundKit = 'digital';
   private totalBars = 0;
   private volumeScale = 1;
+  /** Extra multiplier applied only to subdivision/feel-toggle ticks, on top of volumeScale -- lets them sit quieter (or louder) relative to the main click. */
+  private subdivisionVolumeScale = 1;
   private ramp: TempoRampConfig | null = null;
   private onFinished: (() => void) | undefined;
   private startPerfSec = 0;
@@ -105,6 +109,21 @@ export class MetronomeEngine {
   }
 
   /**
+   * Nudges the click's phase (WHEN it plays) by a small amount, without
+   * touching tempo -- shifts the entire future click grid earlier
+   * (negative) or later (positive), the same way a DJ nudges a turntable
+   * to re-sync two decks. For "right tempo, just not quite landing on
+   * the beat," which changing the BPM can't fix. Only affects clicks not
+   * yet scheduled (same no-stutter guarantee as updateBpm/nudgeBpm), so
+   * it takes effect within one lookahead window, not instantly -- and
+   * not retroactively on whatever's already about to play.
+   */
+  nudgePhase(deltaSec: number): void {
+    if (!this.running) return;
+    this.nextClickTimePerfSec += deltaSec;
+  }
+
+  /**
    * Live-toggles half/double-time feel on the currently running click,
    * without stopping, restarting, or touching the underlying tempo/bar
    * position. Takes effect starting from the next beat boundary (or, for
@@ -127,6 +146,11 @@ export class MetronomeEngine {
   /** Live-adjusts the overall click volume (0-1). Applies to all future clicks immediately -- no restart needed, since volume is read fresh at the moment each click is synthesized. */
   setVolumeScale(next: number): void {
     this.volumeScale = Math.max(0, Math.min(1, next));
+  }
+
+  /** Live-adjusts the subdivision/feel-tick volume multiplier (0-1, on top of setVolumeScale). Same no-restart behavior. */
+  setSubdivisionVolumeScale(next: number): void {
+    this.subdivisionVolumeScale = Math.max(0, Math.min(1, next));
   }
 
   start(bpm: number, startAtPerfSec: number, beatsPerBarOrOptions: number | MetronomeStartOptions = {}): void {
@@ -167,6 +191,7 @@ export class MetronomeEngine {
     this.hasPlayedAnyClick = false;
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
+    this.subdivisionVolumeScale = options.subdivisionVolumeScale ?? 1;
     this.ramp = options.ramp ?? null;
     this.onFinished = options.onFinished;
     this.startPerfSec = startAtPerfSec;
@@ -498,9 +523,12 @@ export class MetronomeEngine {
     }
   }
 
-  /** Subdivision and live-feel extra ticks use the same kit voice as the main click (unaccented), so they sound consistent with it rather than a generic, unrelated tone. */
+  /** Subdivision and live-feel extra ticks use the same kit voice as the main click (unaccented), so they sound consistent with it rather than a generic, unrelated tone -- at their own relative volume (subdivisionVolumeScale), on top of the overall volumeScale. */
   private playSubdivisionTick(audioTime: number): void {
+    const mainVolumeScale = this.volumeScale;
+    this.volumeScale = mainVolumeScale * this.subdivisionVolumeScale;
     this.playKitVoice(audioTime, false);
+    this.volumeScale = mainVolumeScale;
   }
 
   private buildNoiseBuffer(ctx: AudioContext): AudioBuffer {

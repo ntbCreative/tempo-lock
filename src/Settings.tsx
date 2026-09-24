@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
 import type { SoundKit } from './lib/clickPattern';
 import { SOUND_KITS } from './lib/clickPattern';
-import { THEMES, type ThemeId } from './lib/themes';
+import { THEMES, type ThemeId, type ColorScheme } from './lib/themes';
 import { createSilentWavDataUri } from './audio/silentAudio';
 
 const RANGE_PRESETS: { label: string; min: number; max: number }[] = [
@@ -33,6 +33,8 @@ interface SettingsProps {
   updateSettings: (partial: Partial<DetectorSettings>) => void;
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
+  colorScheme: ColorScheme;
+  setColorScheme: (scheme: ColorScheme) => void;
   sectionOrder: SettingsSectionId[];
   reorderSections: (fromIndex: number, toIndex: number) => void;
   onClose: () => void;
@@ -223,6 +225,26 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
 
       <div className="control">
         <div className="control__label-row">
+          <label htmlFor="subdivision-volume">Subdivision volume</label>
+          <span>{Math.round(settings.subdivisionVolume * 100)}%</span>
+        </div>
+        <input
+          id="subdivision-volume"
+          type="range"
+          min={0}
+          max={1}
+          step={0.02}
+          value={settings.subdivisionVolume}
+          onChange={(e) => updateSettings({ subdivisionVolume: Number(e.target.value) })}
+        />
+        <p className="settings-note">
+          How loud the extra ticks (from Subdivision, or a live ½×/2×/4×/8× feel) play relative to the main click.
+          Applies live too.
+        </p>
+      </div>
+
+      <div className="control">
+        <div className="control__label-row">
           <label htmlFor="timing-offset">Click timing</label>
           <span>
             {settings.clickTimingOffsetMs === 0
@@ -365,7 +387,7 @@ function PracticeSection({ settings, updateSettings }: SettingsProps) {
   );
 }
 
-function AppearanceSection({ theme, setTheme }: SettingsProps) {
+function AppearanceSection({ theme, setTheme, colorScheme, setColorScheme }: SettingsProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [airplaySupported, setAirplaySupported] = useState(false);
   const [silentSrc] = useState(createSilentWavDataUri);
@@ -383,6 +405,32 @@ function AppearanceSection({ theme, setTheme }: SettingsProps) {
 
   return (
     <div className="settings-section__body">
+      <div className="control">
+        <div className="control__label-row">
+          <span id="color-scheme-label">Appearance</span>
+        </div>
+        <div className="mode-toggle" role="group" aria-labelledby="color-scheme-label">
+          <button
+            type="button"
+            className="mode-toggle__option"
+            data-active={colorScheme === 'dark'}
+            aria-pressed={colorScheme === 'dark'}
+            onClick={() => setColorScheme('dark')}
+          >
+            Dark
+          </button>
+          <button
+            type="button"
+            className="mode-toggle__option"
+            data-active={colorScheme === 'light'}
+            aria-pressed={colorScheme === 'light'}
+            onClick={() => setColorScheme('light')}
+          >
+            Light
+          </button>
+        </div>
+      </div>
+
       <div className="control">
         <div className="control__label-row">
           <span id="theme-group-label">Color theme</span>

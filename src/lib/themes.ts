@@ -22,3 +22,8 @@ export const THEMES: ThemeOption[] = [
 ];
 
 export const DEFAULT_THEME: ThemeId = 'amber';
+
+/** Independent of the accent color themes above -- picks the base background/text scheme. */
+export type ColorScheme = 'dark' | 'light';
+
+export const DEFAULT_COLOR_SCHEME: ColorScheme = 'dark';

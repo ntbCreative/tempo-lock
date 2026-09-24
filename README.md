@@ -307,6 +307,23 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Live phase nudge (this build)**: new "◂ Earlier" / "Later ▸" buttons,
+  shown while a click is playing, for exactly "right tempo, just not
+  quite landing on the beat" — shifts *when* the click plays by 10ms per
+  tap without touching tempo at all (BPM nudging can't fix a phase
+  offset, only a rate one). Also nudges the "Click timing" setting by the
+  same amount, so the correction carries forward into the next
+  auto-start too, not just the click that's currently running.
+- **Subdivision volume (this build)**: Settings → Sounds → "Subdivision
+  volume" — controls how loud the extra ticks (from the Subdivision
+  setting, or a live ½×/2×/4×/8× feel) play relative to the main click,
+  independent of the overall Click volume. Applies live.
+- **Dark / Light mode (this build)**: Settings → Appearance now has a
+  Dark/Light toggle above the color themes, fully independent of them —
+  any accent color combines with either. Light mode uses a warm cream
+  palette with proportionally softer shadows (the same shadow opacity
+  that reads as depth on a dark background looks heavier on a light
+  one).
 - **"Once stable" adaptive auto-start (this build)**: a new option
   alongside (not replacing) the existing bar-count choices — instead of
   guessing 1 vs 2 vs 3 vs 4 bars up front, this triggers as soon as the

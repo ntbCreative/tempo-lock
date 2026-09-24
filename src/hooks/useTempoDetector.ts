@@ -21,13 +21,14 @@ import type { FeelMultiplier } from '../lib/feel';
 import { createTapTempoState, registerTap, type TapTempoState } from '../lib/tapTempo';
 import { parseStoredSettings, serializeSettings } from '../lib/settingsStorage';
 import { moveItem } from '../lib/layoutOrder';
-import { DEFAULT_THEME, type ThemeId } from '../lib/themes';
+import { DEFAULT_THEME, type ThemeId, DEFAULT_COLOR_SCHEME, type ColorScheme } from '../lib/themes';
 import { addPreset, updatePreset, deletePreset, findPreset, type Preset } from '../lib/presets';
 
 const POSITION_POLL_MS = 100;
 
 const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
 const THEME_STORAGE_KEY = 'tempo-lock:theme';
+const COLOR_SCHEME_STORAGE_KEY = 'tempo-lock:color-scheme';
 const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
 const MAIN_SECTION_ORDER_STORAGE_KEY = 'tempo-lock:main-section-order';
 const PRESETS_STORAGE_KEY = 'tempo-lock:presets';
@@ -60,6 +61,8 @@ export interface DetectorSettings {
   subdivision: Subdivision;
   /** Overall click track volume, 0-1. Applies to both auto-triggered and manual clicks; the count-in's own quieter volume is relative to this. */
   masterVolume: number;
+  /** Relative volume of subdivision/feel-toggle ticks, 0-1, on top of masterVolume -- 1 = same volume as the main click. */
+  subdivisionVolume: number;
   /** Manual timing fine-tune (ms) on top of automatic output-latency compensation -- positive plays the click earlier, for hardware (e.g. Bluetooth) whose real output delay is worse than the browser can report. */
   clickTimingOffsetMs: number;
   countInEnabled: boolean;
@@ -94,6 +97,7 @@ export const DEFAULT_SETTINGS: DetectorSettings = {
   soundKit: 'digital',
   subdivision: 'none',
   masterVolume: 1,
+  subdivisionVolume: 1,
   clickTimingOffsetMs: 0,
   countInEnabled: true,
   countInVolume: 0.35,
@@ -143,6 +147,9 @@ export function useTempoDetector() {
   const [settings, setSettings] = useState<DetectorSettings>(() => loadInitial(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS));
   const [theme, setThemeState] = useState<ThemeId>(
     () => loadInitial(THEME_STORAGE_KEY, { theme: DEFAULT_THEME }).theme
+  );
+  const [colorScheme, setColorSchemeState] = useState<ColorScheme>(
+    () => loadInitial(COLOR_SCHEME_STORAGE_KEY, { colorScheme: DEFAULT_COLOR_SCHEME }).colorScheme
   );
   const [sectionOrder, setSectionOrder] = useState<SettingsSectionId[]>(loadInitialSectionOrder);
   const [mainSectionOrder, setMainSectionOrder] = useState<MainSectionId[]>(loadInitialMainSectionOrder);
@@ -254,6 +261,10 @@ export function useTempoDetector() {
   }, [theme]);
 
   useEffect(() => {
+    window.localStorage.setItem(COLOR_SCHEME_STORAGE_KEY, serializeSettings({ colorScheme }));
+  }, [colorScheme]);
+
+  useEffect(() => {
     window.localStorage.setItem(SECTION_ORDER_STORAGE_KEY, serializeSettings({ order: sectionOrder }));
   }, [sectionOrder]);
 
@@ -270,6 +281,11 @@ export function useTempoDetector() {
     metronomeEngineRef.current?.setVolumeScale(settings.masterVolume);
     countInEngineRef.current?.setVolumeScale(settings.masterVolume * settings.countInVolume);
   }, [settings.masterVolume, settings.countInVolume]);
+
+  useEffect(() => {
+    metronomeEngineRef.current?.setSubdivisionVolumeScale(settings.subdivisionVolume);
+    countInEngineRef.current?.setSubdivisionVolumeScale(settings.subdivisionVolume);
+  }, [settings.subdivisionVolume]);
 
   useEffect(() => {
     engineRef.current = new LiveTempoEngine({
@@ -312,6 +328,7 @@ export function useTempoDetector() {
             soundKit: cfg.soundKit,
             subdivision: cfg.subdivision,
             volumeScale: cfg.masterVolume,
+            subdivisionVolumeScale: cfg.subdivisionVolume,
             timingOffsetMs: cfg.clickTimingOffsetMs,
             totalBars: 0,
           });
@@ -394,6 +411,7 @@ export function useTempoDetector() {
               subdivision: cfg.subdivision,
               totalBars: cfg.metronomeBars,
               volumeScale: cfg.masterVolume * cfg.countInVolume,
+              subdivisionVolumeScale: cfg.subdivisionVolume,
               timingOffsetMs: cfg.clickTimingOffsetMs,
             });
           }
@@ -470,6 +488,10 @@ export function useTempoDetector() {
     setThemeState(next);
   }, []);
 
+  const setColorScheme = useCallback((next: ColorScheme) => {
+    setColorSchemeState(next);
+  }, []);
+
   const reorderSections = useCallback((fromIndex: number, toIndex: number) => {
     setSectionOrder((prev) => moveItem(prev, fromIndex, toIndex));
   }, []);
@@ -510,6 +532,27 @@ export function useTempoDetector() {
     [metronomeActive, clampBpm]
   );
 
+  /**
+   * Fine phase adjustment for a running click -- shifts WHEN it plays
+   * without touching tempo, for "right tempo, just not quite landing on
+   * the beat" (which BPM nudging can't fix). Only meaningful while a
+   * click is actually running, since there's no running timing to nudge
+   * otherwise. Also nudges clickTimingOffsetMs by the same amount
+   * (clamped to its usual +/-100ms range) so the correction carries
+   * forward into the next auto-start too, not just this session's
+   * already-running click.
+   */
+  const nudgePhase = useCallback(
+    (deltaMs: number) => {
+      if (!metronomeActive) return;
+      metronomeEngineRef.current?.nudgePhase(deltaMs / 1000);
+      updateSettings({
+        clickTimingOffsetMs: Math.max(-100, Math.min(100, settingsRef.current.clickTimingOffsetMs + deltaMs)),
+      });
+    },
+    [metronomeActive, updateSettings]
+  );
+
   const playManualClick = useCallback(() => {
     const cfg = settingsRef.current;
     if (!metronomeEngineRef.current) {
@@ -537,6 +580,7 @@ export function useTempoDetector() {
       soundKit: cfg.soundKit,
       subdivision: cfg.subdivision,
       volumeScale: cfg.masterVolume,
+      subdivisionVolumeScale: cfg.subdivisionVolume,
       timingOffsetMs: cfg.clickTimingOffsetMs,
       totalBars: cfg.clickTrackLengthBars,
       ramp,
@@ -618,6 +662,8 @@ export function useTempoDetector() {
     updateSettings,
     theme,
     setTheme,
+    colorScheme,
+    setColorScheme,
     sectionOrder,
     reorderSections,
     mainSectionOrder,
@@ -637,6 +683,7 @@ export function useTempoDetector() {
     halveManualBpm,
     doubleManualBpm,
     nudgeBpm,
+    nudgePhase,
     playManualClick,
     feel,
     setFeel,
