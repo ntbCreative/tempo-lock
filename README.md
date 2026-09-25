@@ -307,6 +307,20 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **A living, beat-synced BPM readout (this build)**: in response to
+  wanting the app to genuinely wow people at a glance — the biggest
+  single lever for that is motion, not more static polish. The BPM
+  number now has a glowing ring around it that's a real visualization of
+  the beat, not decoration: it flashes in time with the actual click
+  when one's playing, and pulses continuously at the detected tempo when
+  locked but nothing's playing yet — reusing the exact same
+  playing-vs-locked logic the old small indicator dot used, just made
+  into the centerpiece instead of an afterthought. There's also a
+  one-time celebratory pop on the number itself the moment detection
+  actually locks in, so that moment feels like something happened, not
+  just a status label quietly updating. This is a genuinely animated
+  effect — worth testing live in the app rather than judging from a
+  static screenshot, since motion is the whole point of it.
 - **Auto-start click: a clear on/off toggle (this build)**: previously,
   "just use the app for BPM detection" meant knowing to set "Auto-start
   after" to "Off" in a dropdown — not obvious. Split into a plain

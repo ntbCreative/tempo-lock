@@ -184,13 +184,13 @@ body {
 }
 
 .bpm-readout {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 12px;
   line-height: 1;
   max-width: 100%;
   padding: 0 16px;
-  overflow: hidden;
 }
 
 .bpm-readout__value {
@@ -213,47 +213,74 @@ body {
   color: var(--text-dim);
 }
 
-.beat-pulse {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  align-self: center;
+/* A glowing ring around the whole readout, pulsing in sync with the
+   actual beat -- turns the number into a living visualization of the
+   tempo rather than a static readout. Flashes on real click beats when
+   playing; pulses continuously at the detected tempo when locked but no
+   click is running yet. */
+.bpm-readout__ring {
+  position: absolute;
+  inset: -28px -20px;
+  border-radius: 40px;
+  border: 3px solid var(--accent);
+  pointer-events: none;
+  opacity: 0;
 }
 
-.beat-pulse--idle {
-  background: var(--line);
+.bpm-readout__ring--flash {
+  animation: ring-flash 180ms ease-out;
 }
 
-.beat-pulse--flash {
-  background: var(--accent);
-  animation: beat-pulse-flash 160ms ease-out;
+.bpm-readout__ring--pulse {
+  animation: ring-pulse linear infinite;
 }
 
-.beat-pulse--tempo {
-  background: var(--secondary);
-  animation: beat-pulse-tempo linear infinite;
-}
-
-@keyframes beat-pulse-flash {
+@keyframes ring-flash {
   0% {
-    transform: scale(1);
-    opacity: 1;
+    opacity: 0.85;
+    transform: scale(0.97);
+    box-shadow: 0 0 0 0 rgba(var(--accent-glow), 0.55);
   }
   100% {
-    transform: scale(1.8);
     opacity: 0;
+    transform: scale(1.05);
+    box-shadow: 0 0 60px 16px rgba(var(--accent-glow), 0);
   }
 }
 
-@keyframes beat-pulse-tempo {
+@keyframes ring-pulse {
   0%,
   100% {
-    opacity: 0.3;
-    transform: scale(0.85);
+    opacity: 0.12;
+    transform: scale(0.985);
+    box-shadow: 0 0 0 0 rgba(var(--accent-glow), 0);
   }
-  10% {
-    opacity: 1;
-    transform: scale(1.1);
+  12% {
+    opacity: 0.5;
+    transform: scale(1.02);
+    box-shadow: 0 0 40px 6px rgba(var(--accent-glow), 0.25);
+  }
+  45% {
+    opacity: 0.08;
+    transform: scale(1);
+  }
+}
+
+/* A one-time celebratory pop the moment detection actually locks in --
+   makes that moment feel rewarding, not just an informational update. */
+.bpm-readout[data-just-locked='true'] .bpm-readout__value {
+  animation: value-lock-pop 550ms var(--ease);
+}
+
+@keyframes value-lock-pop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 

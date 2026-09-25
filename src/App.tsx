@@ -94,6 +94,7 @@ function App() {
   const [lastAutoStartBars, setLastAutoStartBars] = useState<Exclude<BarCount, 0>>(
     settings.metronomeBars !== 0 ? settings.metronomeBars : 2
   );
+  const [justLocked, setJustLocked] = useState(false);
   const prevMetronomeActiveRef = useRef(false);
 
   useEffect(() => {
@@ -129,6 +130,20 @@ function App() {
     }
     prevMetronomeActiveRef.current = metronomeActive;
   }, [metronomeActive, metronomeBpm]);
+
+  // A brief celebratory flourish the moment detection actually locks in --
+  // makes that moment feel rewarding, not just informational. Only fires
+  // on the transition into 'locked', not on every render while locked.
+  const prevContinuityStatusRef = useRef(continuity.status);
+  useEffect(() => {
+    if (continuity.status === 'locked' && prevContinuityStatusRef.current !== 'locked') {
+      setJustLocked(true);
+      const timeout = setTimeout(() => setJustLocked(false), 550);
+      prevContinuityStatusRef.current = continuity.status;
+      return () => clearTimeout(timeout);
+    }
+    prevContinuityStatusRef.current = continuity.status;
+  }, [continuity.status]);
 
   const displayBpm = useMemo(() => {
     if (continuity.displayedBpm !== null) return continuity.displayedBpm.toFixed(1);
@@ -183,29 +198,27 @@ function App() {
         </div>
 
         <section className="stage__hero">
-        <div className="bpm-readout" role="group" aria-label={bpmAriaLabel}>
+        <div className="bpm-readout" role="group" aria-label={bpmAriaLabel} data-just-locked={justLocked}>
+          {metronomeActive && metronomePosition ? (
+            <span
+              key={`click-${metronomePosition.barIndex}-${metronomePosition.beatInBar}`}
+              className="bpm-readout__ring bpm-readout__ring--flash"
+              aria-hidden="true"
+            />
+          ) : continuity.status === 'locked' && continuity.displayedBpm ? (
+            <span
+              key={`tempo-${Math.round(continuity.displayedBpm)}`}
+              className="bpm-readout__ring bpm-readout__ring--pulse"
+              style={{ animationDuration: `${60000 / continuity.displayedBpm}ms` }}
+              aria-hidden="true"
+            />
+          ) : null}
           <span className="bpm-readout__value" aria-hidden="true">
             {displayBpm ?? '--'}
           </span>
           <span className="bpm-readout__unit" aria-hidden="true">
             BPM
           </span>
-          {metronomeActive && metronomePosition ? (
-            <span
-              key={`click-${metronomePosition.barIndex}-${metronomePosition.beatInBar}`}
-              className="beat-pulse beat-pulse--flash"
-              aria-hidden="true"
-            />
-          ) : continuity.status === 'locked' && continuity.displayedBpm ? (
-            <span
-              key={`tempo-${Math.round(continuity.displayedBpm)}`}
-              className="beat-pulse beat-pulse--tempo"
-              style={{ animationDuration: `${60000 / continuity.displayedBpm}ms` }}
-              aria-hidden="true"
-            />
-          ) : (
-            <span className="beat-pulse beat-pulse--idle" aria-hidden="true" />
-          )}
         </div>
 
         <div className="meter-row">
