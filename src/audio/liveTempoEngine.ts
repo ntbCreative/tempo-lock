@@ -105,15 +105,19 @@ export function isMicrophoneSupported(): boolean {
  * usually won't re-prompt or have to wait on anything. Safe to call
  * speculatively: resolves quietly either way, and a denial here doesn't
  * count against the person -- they'll just see the same permission-denied
- * state as before if they later press Start Listening.
+ * state as before if they later press Start Listening. Returns whether
+ * permission was actually granted, so a caller can decide whether it's
+ * safe to auto-start listening right away.
  */
-export async function requestMicrophonePermissionEarly(): Promise<void> {
-  if (!isMicrophoneSupported()) return;
+export async function requestMicrophonePermissionEarly(): Promise<boolean> {
+  if (!isMicrophoneSupported()) return false;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((track) => track.stop());
+    return true;
   } catch {
     // Denied or unavailable -- fine, this was just a head start attempt.
+    return false;
   }
 }
 

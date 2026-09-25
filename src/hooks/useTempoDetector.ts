@@ -243,15 +243,6 @@ export function useTempoDetector() {
     settingsRef.current = settings;
   }, [settings]);
 
-  // Request mic permission as soon as the app opens rather than waiting
-  // for Start Listening -- the browser's own permission prompt can't be
-  // skipped, but front-loading it here means it's already resolved by
-  // the time Start Listening is actually pressed, instead of prompting
-  // (and waiting on the person) at that moment.
-  useEffect(() => {
-    requestMicrophonePermissionEarly();
-  }, []);
-
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, serializeSettings(settings));
   }, [settings]);
@@ -467,6 +458,24 @@ export function useTempoDetector() {
     // first mic-based read to guess the octave blind.
     engineRef.current?.start(tapState.bpm);
   }, [tapState.bpm]);
+
+  // Auto-start listening as soon as the app opens and mic permission is
+  // actually granted -- an "always listening" experience like other BPM
+  // detector apps, rather than requiring an explicit first tap on Start
+  // Listening every time. Runs once on mount; Stop Listening still works
+  // as a normal manual override afterward.
+  useEffect(() => {
+    let cancelled = false;
+    requestMicrophonePermissionEarly().then((granted) => {
+      if (granted && !cancelled) {
+        start();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only
+  }, []);
 
   const stop = useCallback(() => {
     engineRef.current?.stop();

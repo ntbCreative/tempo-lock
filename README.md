@@ -307,6 +307,16 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Always-listening on app open (this build)**: matching apps like BPM
+  Detector and Live BPM — the app now automatically starts listening as
+  soon as it opens and mic permission is actually granted, instead of
+  requiring an explicit first tap on Start Listening every time.
+  `requestMicrophonePermissionEarly()` (added a few builds back) now
+  reports back whether permission was actually granted, and if so,
+  listening begins immediately. Runs once per app open; Stop Listening
+  still works as a normal manual override afterward, and if permission
+  is denied, nothing auto-starts — same as pressing Start Listening
+  yourself would behave.
 - **A living, beat-synced BPM readout (this build)**: in response to
   wanting the app to genuinely wow people at a glance — the biggest
   single lever for that is motion, not more static polish. The BPM
