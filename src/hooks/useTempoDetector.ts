@@ -208,6 +208,15 @@ export function useTempoDetector() {
   // fresh session.
   const stabilityTriggeredRef = useRef(false);
   const REQUIRED_STABLE_TICKS = 15; // ~2.25s at the ~150ms analysis interval
+  // Set right before a successful auto-start trigger calls engine.stop() to
+  // actually release the mic. That stop() synchronously re-invokes this
+  // same onUpdate handler (status -> 'idle') before triggerMetronomeStart
+  // even returns -- without this guard, the reset branch below would see
+  // the click it just started as "still running" and immediately stop it
+  // again, since from its normal perspective a non-listening status means
+  // the person stopped everything. This flag tells it that's not the case
+  // this time.
+  const autoStoppedListeningRef = useRef(false);
 
   const clampBpm = useCallback(
     (bpm: number) => Math.min(settingsRef.current.maxBpm, Math.max(settingsRef.current.minBpm, bpm)),
@@ -294,7 +303,7 @@ export function useTempoDetector() {
         setEngineState(state);
 
         if (state.status !== 'listening') {
-          if (metronomeEngineRef.current?.isRunning() || countInEngineRef.current?.isRunning()) {
+          if (!autoStoppedListeningRef.current && (metronomeEngineRef.current?.isRunning() || countInEngineRef.current?.isRunning())) {
             metronomeEngineRef.current?.stop();
             countInEngineRef.current?.stop();
             setMetronomeActive(false);
@@ -304,8 +313,7 @@ export function useTempoDetector() {
           barCountdownRef.current = createBarCountdownState();
           stabilityTriggeredRef.current = false;
           autoStartSuppressedRef.current = false; // a fresh session can always auto-start again
-          setBpmHistory([]);
-          lastGraphSampleRef.current = 0;
+          autoStoppedListeningRef.current = false;
           return;
         }
 
@@ -354,10 +362,16 @@ export function useTempoDetector() {
           liveTrackingSuppressedRef.current = false;
           startPositionPoll();
           // Gig-ready: once a tempo has been confirmed and the click starts,
-          // stop re-evaluating entirely for the rest of this session -- a
+          // stop listening entirely for the rest of this session -- not
+          // just pause re-evaluation, but actually release the mic. A
           // locked-in tempo drifting afterward, even silently, undermines
-          // the one thing this workflow needs to be trustworthy.
-          engineRef.current?.freeze();
+          // the one thing this workflow needs to be trustworthy, and once
+          // the click has taken over there's no reason to keep the mic
+          // open at all. autoStoppedListeningRef tells the reset logic
+          // this stop() is expected and shouldn't tear down the click that
+          // was just started.
+          autoStoppedListeningRef.current = true;
+          engineRef.current?.stop();
         };
 
         if (cfg.metronomeBars === -1) {
@@ -482,6 +496,26 @@ export function useTempoDetector() {
     // it in before pressing Start Listening, rather than leaving the very
     // first mic-based read to guess the octave blind.
     engineRef.current?.start(tapState.bpm);
+    // A genuinely new session starts its own fresh graph -- but stopping
+    // (manually, or automatically once auto-start hands off to the click)
+    // no longer clears it, so the last session's tempo history stays
+    // visible for reference until a new one actually begins.
+    setBpmHistory([]);
+    lastGraphSampleRef.current = 0;
+  }, [tapState.bpm]);
+
+  /**
+   * Restarts detection from scratch mid-session -- clears the current
+   * lock/frozen state, tempo graph, and any auto-start progress, and
+   * immediately starts listening again. For when the detected tempo has
+   * drifted or locked onto the wrong thing and the fastest fix is a clean
+   * re-acquire, without reaching for Stop then Start separately.
+   */
+  const resetListening = useCallback(() => {
+    engineRef.current?.stop();
+    engineRef.current?.start(tapState.bpm);
+    setBpmHistory([]);
+    lastGraphSampleRef.current = 0;
   }, [tapState.bpm]);
 
   // Auto-start listening as soon as the app opens and mic permission is
@@ -705,6 +739,7 @@ export function useTempoDetector() {
     engineState,
     bpmHistory,
     start,
+    resetListening,
     stop,
     tapState,
     tap,

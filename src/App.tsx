@@ -45,10 +45,23 @@ function TempoGraph({ history }: { history: { t: number; bpm: number }[] }): Rea
     .join(' ');
 
   const latest = history[history.length - 1].bpm;
+  const midBpm = (yMin + yMax) / 2;
 
   return (
     <div style={{ width: '100%' }}>
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden="true">
+        {/* Y-axis reference numbers -- a plain BPM scale so the line's
+            shape means something at a glance, not just relative wiggle. */}
+        <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="var(--hero-border)" strokeWidth="1" strokeDasharray="3 3" />
+        <text x="2" y="10" fontSize="9" fill="var(--text-dim)">
+          {yMax.toFixed(0)}
+        </text>
+        <text x="2" y={height / 2 - 3} fontSize="9" fill="var(--text-dim)">
+          {midBpm.toFixed(0)}
+        </text>
+        <text x="2" y={height - 3} fontSize="9" fill="var(--text-dim)">
+          {yMin.toFixed(0)}
+        </text>
         <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       </svg>
       <p className="settings-note" style={{ textAlign: 'center' }}>
@@ -105,6 +118,7 @@ function App() {
     engineState,
     bpmHistory,
     start,
+    resetListening,
     stop,
     tapState,
     tap,
@@ -263,12 +277,12 @@ function App() {
             <TempoGraph history={bpmHistory} />
           </div>
 
-          {engineState.frozen && (
+          {metronomeActive && !isListening && (
             <>
               <div className="hero-panel__divider" />
               <p className="hero-panel__status">
                 <span className="hero-panel__status-dot" aria-hidden="true" />
-                Locked for this session
+                Detection stopped — click running
               </p>
             </>
           )}
@@ -436,14 +450,25 @@ function App() {
               </>
             ),
             start: (
-              <button
-                type="button"
-                className={`big-button ${isListening ? 'big-button--stop' : 'big-button--start'}`}
-                onClick={isListening ? stop : start}
-                disabled={!isMicrophoneSupported}
-              >
-                {isListening ? 'Stop Listening' : 'Start Listening'}
-              </button>
+              <div className="listen-row">
+                <button
+                  type="button"
+                  className={`big-button listen-row__main ${isListening ? 'big-button--stop' : 'big-button--start'}`}
+                  onClick={isListening ? stop : start}
+                  disabled={!isMicrophoneSupported}
+                >
+                  {isListening ? 'Stop Listening' : 'Start Listening'}
+                </button>
+                <button
+                  type="button"
+                  className="big-button big-button--tap listen-row__reset"
+                  onClick={resetListening}
+                  disabled={!isMicrophoneSupported}
+                  aria-label="Reset detection and start listening fresh"
+                >
+                  Reset
+                </button>
+              </div>
             ),
             tap: (
               <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>

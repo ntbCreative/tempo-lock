@@ -307,6 +307,32 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Detection actually stops when auto-start triggers; graph gets numbers;
+  full width; Reset button (this build)**: several fixes and additions
+  together —
+  (1) Once auto-start hands off to the click, detection now genuinely
+  stops — the mic is released, not just paused (previously `freeze()`
+  kept the mic open and just ignored new readings). Required a
+  reentrancy guard (`autoStoppedListeningRef`): the stop() call
+  synchronously re-triggers the same update handler before the trigger
+  function even returns, and without the guard that reentrant call would
+  see the click that was just started and immediately stop it again,
+  reading a non-listening status as "the person stopped everything."
+  (2) The tempo graph now shows actual BPM numbers (top/middle/bottom of
+  its Y-axis, plus a subtle midline), not just an unlabeled squiggle.
+  (3) The graph's history no longer clears on every stop — only when a
+  genuinely new listening session starts — so it survives both a manual
+  stop and this new auto-stop, staying useful as a reference exactly
+  when it matters most.
+  (4) Width constraints widened from 420px to 640px throughout (they
+  were only ever binding on phone screens by coincidence, never
+  intentionally), and the main content's side padding reduced, so
+  controls use more of the actual screen instead of an arbitrary cap —
+  addresses the click-track section feeling squished.
+  (5) New "Reset" button next to Start/Stop Listening (same row) —
+  restarts detection from scratch (clears the lock, the graph, and any
+  auto-start progress) without needing to tap Stop then Start
+  separately.
 - **Partial revert + sharp edges, matching the reference more precisely
   (this build)**: the previous round's structural changes (merging
   Start/Stop Listening with Play/Stop Click into one row, collapsing
