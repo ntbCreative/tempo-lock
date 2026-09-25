@@ -30,6 +30,12 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* The hero panel (BPM + graph) gets its own subtly teal-tinted surface,
+     distinct from the plain card background used elsewhere -- it's the
+     one element on the page that should read as the clear anchor. */
+  --hero-bg: #1c2c29;
+  --hero-border: #35493f;
 }
 
 /* Light mode: independent of the accent color themes below -- either can
@@ -47,6 +53,8 @@
 
   --shadow-sm: 0 1px 3px rgba(22, 24, 29, 0.1);
   --shadow-md: 0 6px 18px rgba(22, 24, 29, 0.12);
+  --hero-bg: #e8f2ee;
+  --hero-border: #bcd9cd;
 }
 
 [data-theme='cyan'] {
@@ -130,10 +138,24 @@ body {
   padding: 30px 20px 8px;
 }
 
+.stage__brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .stage__brand {
-  font-size: 15px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.stage__brand-sub {
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--text-dim);
 }
 
@@ -141,6 +163,24 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.arrange-toggle {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 110ms var(--ease), color 110ms var(--ease), border-color 110ms var(--ease);
+}
+
+.arrange-toggle[data-active='true'] {
+  background: var(--secondary);
+  color: #04211f;
+  border-color: var(--secondary);
 }
 
 .stage__status {
@@ -188,14 +228,81 @@ body {
   min-height: 55vh;
 }
 
+/* The unified hero panel: BPM readout + tempo graph + locked status,
+   together in one bordered, teal-tinted surface -- the one clear anchor
+   on the page. No flashing or pulsing effects; status is communicated
+   with plain text and a static dot, not motion. */
+.hero-panel {
+  width: 100%;
+  max-width: 380px;
+  background: var(--hero-bg);
+  border: 1px solid var(--hero-border);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hero-panel__eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+
+.hero-panel__unit {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+}
+
+.hero-panel__divider {
+  width: 100%;
+  height: 1px;
+  background: var(--hero-border);
+  margin: 12px 0;
+}
+
+.hero-panel__graph {
+  width: 100%;
+}
+
+.hero-panel__graph-caption {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+
+.hero-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 12px 0 0;
+}
+
+.hero-panel__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--secondary);
+  flex: 0 0 auto;
+}
+
 .bpm-readout {
-  position: relative;
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  line-height: 1;
+  justify-content: center;
   max-width: 100%;
-  padding: 0 16px;
 }
 
 .bpm-readout__value {
@@ -205,88 +312,10 @@ body {
      the decimal), not just a bare 3-digit whole number. Bold weight and
      plain color, no glow -- a precision instrument's readout is crisp,
      not a neon sign; the scale and the accent color itself carry it. */
-  font-size: clamp(50px, 19vw, 116px);
+  font-size: clamp(46px, 16vw, 96px);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
   white-space: nowrap;
-}
-
-.bpm-readout__unit {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-}
-
-/* A glowing ring around the whole readout, pulsing in sync with the
-   actual beat -- turns the number into a living visualization of the
-   tempo rather than a static readout. Flashes on real click beats when
-   playing; pulses continuously at the detected tempo when locked but no
-   click is running yet. */
-.bpm-readout__ring {
-  position: absolute;
-  inset: -28px -20px;
-  border-radius: 40px;
-  border: 3px solid var(--accent);
-  pointer-events: none;
-  opacity: 0;
-}
-
-.bpm-readout__ring--flash {
-  animation: ring-flash 180ms ease-out;
-}
-
-.bpm-readout__ring--pulse {
-  animation: ring-pulse linear infinite;
-}
-
-@keyframes ring-flash {
-  0% {
-    opacity: 0.85;
-    transform: scale(0.97);
-    box-shadow: 0 0 0 0 rgba(var(--accent-glow), 0.55);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.05);
-    box-shadow: 0 0 60px 16px rgba(var(--accent-glow), 0);
-  }
-}
-
-@keyframes ring-pulse {
-  0%,
-  100% {
-    opacity: 0.12;
-    transform: scale(0.985);
-    box-shadow: 0 0 0 0 rgba(var(--accent-glow), 0);
-  }
-  12% {
-    opacity: 0.5;
-    transform: scale(1.02);
-    box-shadow: 0 0 40px 6px rgba(var(--accent-glow), 0.25);
-  }
-  45% {
-    opacity: 0.08;
-    transform: scale(1);
-  }
-}
-
-/* A one-time celebratory pop the moment detection actually locks in --
-   makes that moment feel rewarding, not just an informational update. */
-.bpm-readout[data-just-locked='true'] .bpm-readout__value {
-  animation: value-lock-pop 550ms var(--ease);
-}
-
-@keyframes value-lock-pop {
-  0% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-  }
 }
 
 .meter-row {
@@ -351,6 +380,76 @@ body {
   color: var(--red);
 }
 
+/* The current-beat indicator row: one pill per beat in the bar, the
+   active one highlighted. Static highlight change, no flash/animation. */
+.beat-indicator {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.beat-indicator__pills {
+  display: flex;
+  gap: 8px;
+}
+
+.beat-indicator__pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.beat-indicator__pill[data-active='true'] {
+  background: var(--secondary);
+  color: #04211f;
+}
+
+.beat-indicator__caption {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* The Start/Stop Listening + Play/Stop Click pair -- two independently
+   controllable actions, shown side by side as a matched set. */
+.playback-row {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  gap: 12px;
+}
+
+.playback-row__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.playback-row__button {
+  width: 100%;
+  max-width: none;
+  padding: 20px 14px;
+  font-size: 17px;
+}
+
+.playback-row__caption {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
 .notice--metronome {
   color: var(--secondary);
 }
@@ -361,33 +460,51 @@ body {
   margin-top: 8px;
 }
 
-/* Collapsed by default -- dense debugging detail, not something a
-   performing drummer needs taking up space next to the controls they're
-   actually reaching for. */
-.diagnostics-disclosure {
+/* Collapsed accordion sections at the bottom of the main screen --
+   secondary settings/diagnostics/save, out of the way until wanted. */
+.bottom-accordion {
   width: 100%;
   max-width: 420px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
-.diagnostics-disclosure summary {
-  font-size: 12px;
-  color: var(--text-dim);
+.bottom-accordion__item {
+  border-top: 1px solid var(--line);
+}
+
+.bottom-accordion__item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.bottom-accordion__item summary {
+  padding: 16px 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
   cursor: pointer;
   list-style: none;
   user-select: none;
 }
 
-.diagnostics-disclosure summary::-webkit-details-marker {
+.bottom-accordion__item summary::-webkit-details-marker {
   display: none;
 }
 
-.diagnostics-disclosure summary::before {
+.bottom-accordion__item summary::before {
   content: '▸ ';
+  color: var(--text-dim);
 }
 
-.diagnostics-disclosure[open] summary::before {
+.bottom-accordion__item[open] summary::before {
   content: '▾ ';
+}
+
+.bottom-accordion__body {
+  padding: 0 4px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .notice--locked {
