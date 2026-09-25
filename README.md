@@ -307,6 +307,41 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Partial revert + sharp edges, matching the reference more precisely
+  (this build)**: the previous round's structural changes (merging
+  Start/Stop Listening with Play/Stop Click into one row, collapsing
+  Settings/Diagnostics/Save behind a bottom accordion) went further than
+  intended — reverted both back to how they worked before: independent
+  buttons in their own sections, Settings behind its usual gear icon,
+  Diagnostics as a small always-available disclosure near the meters,
+  and the preset/save panel always visible at the bottom. Kept what was
+  explicitly re-confirmed: the tempo graph inside the BPM panel, the
+  beat-indicator pills, and Arrange mode. Also sharpened corners
+  throughout — the radius tokens dropped from 10/16/24px to 4/6/8px, and
+  several hardcoded radius values that were bypassing those tokens
+  (section cards, beat-indicator pills, the Arrange/status pills, the
+  settings panel, a couple of inputs) now use them too, for a crisper,
+  more geometric look matching the reference image.
+- **Major layout rework from a user-provided reference screenshot (this
+  build)**: matched to a specific "Tempo / Live Instrument" design
+  reference — the tempo graph now lives inside the same panel as the BPM
+  readout, directly below the number (no longer a separate reorderable
+  section, so it can't be rearranged apart from the readout); all
+  flashing/pulsing animations (the beat-synced glow ring, the lock-in
+  pop) were removed entirely in favor of a plain static status dot, per
+  an explicit "avoid flashing effects" request; a new beat-indicator row
+  (numbered pills highlighting the current beat, "Bar X / Beat Y of Z")
+  was added using the click engine's existing position data; Start/Stop
+  Listening and Play/Stop Click are now a paired two-column row with
+  status captions, while staying two fully independent controls; and
+  reordering now has an explicit "Arrange" mode — drag handles and the
+  ▲/▼ buttons (already icon-only, no visible "Up"/"Down" text) are
+  hidden until Arrange is switched on, keeping the default view calm.
+  Diagnostics, sound/detection settings, and the preset/save-setup
+  feature all moved into a collapsed accordion at the bottom of the
+  page. This was a pure presentation-layer change — no detection,
+  timing, playback, or settings-persistence logic was touched; 218/218
+  tests still pass unmodified.
 - **Sections separated again, modern button treatment (this build)**:
   after the full redesign moved to pure spacing for separation, feedback
   was that the sections needed clearer visual separation back — now each

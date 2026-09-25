@@ -40,9 +40,9 @@ export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'practice
 export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'practice', 'appearance'];
 
 /** The main screen's reorderable blocks, below the fixed BPM readout/meters, which always stay anchored at the top. */
-export type MainSectionId = 'mode' | 'start' | 'tap' | 'click' | 'graph';
+export type MainSectionId = 'mode' | 'start' | 'tap' | 'click';
 
-export const DEFAULT_MAIN_SECTION_ORDER: MainSectionId[] = ['mode', 'start', 'graph', 'tap', 'click'];
+export const DEFAULT_MAIN_SECTION_ORDER: MainSectionId[] = ['mode', 'start', 'tap', 'click'];
 
 export interface DetectorSettings {
   smoothing: number;
