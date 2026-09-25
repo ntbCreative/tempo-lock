@@ -9,9 +9,10 @@ import './App.css';
 
 const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
   mode: 'Detection mode',
-  start: 'Playback controls',
+  start: 'Listen',
+  graph: 'Tempo graph',
   tap: 'Tap tempo',
-  click: 'Click track settings',
+  click: 'Click track',
 };
 
 /** A small live line chart of recent detected BPM -- shows tempo stability over time, not just the instant reading. Auto-scales to the observed range so even small wobbles stay visible. */
@@ -139,7 +140,7 @@ function App() {
   const [lastAutoStartBars, setLastAutoStartBars] = useState<Exclude<BarCount, 0>>(
     settings.metronomeBars !== 0 ? settings.metronomeBars : 2
   );
-  const [arrangeMode, setArrangeMode] = useState(false);
+  const [justLocked, setJustLocked] = useState(false);
   const prevMetronomeActiveRef = useRef(false);
 
   useEffect(() => {
@@ -176,6 +177,20 @@ function App() {
     prevMetronomeActiveRef.current = metronomeActive;
   }, [metronomeActive, metronomeBpm]);
 
+  // A brief celebratory flourish the moment detection actually locks in --
+  // makes that moment feel rewarding, not just informational. Only fires
+  // on the transition into 'locked', not on every render while locked.
+  const prevContinuityStatusRef = useRef(continuity.status);
+  useEffect(() => {
+    if (continuity.status === 'locked' && prevContinuityStatusRef.current !== 'locked') {
+      setJustLocked(true);
+      const timeout = setTimeout(() => setJustLocked(false), 550);
+      prevContinuityStatusRef.current = continuity.status;
+      return () => clearTimeout(timeout);
+    }
+    prevContinuityStatusRef.current = continuity.status;
+  }, [continuity.status]);
+
   const displayBpm = useMemo(() => {
     if (continuity.displayedBpm !== null) return continuity.displayedBpm.toFixed(1);
     if (tapState.bpm !== null) return tapState.bpm.toFixed(1);
@@ -209,20 +224,16 @@ function App() {
   return (
     <div className="stage">
       <header className="stage__header">
-        <div className="stage__brand-block">
-          <span className="stage__brand">TEMPO LOCK /</span>
-          <span className="stage__brand-sub">LIVE INSTRUMENT</span>
-        </div>
+        <span className="stage__brand">TEMPO LOCK</span>
         <div className="stage__header-right">
           <span className={`stage__status stage__status--${statusClass}`}>{label}</span>
           <button
             type="button"
-            className="arrange-toggle"
-            data-active={arrangeMode}
-            onClick={() => setArrangeMode((prev) => !prev)}
-            aria-pressed={arrangeMode}
+            className="settings-toggle"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open settings"
           >
-            {arrangeMode ? 'Done' : 'Arrange'}
+            ⚙
           </button>
         </div>
       </header>
@@ -233,64 +244,62 @@ function App() {
         </div>
 
         <section className="stage__hero">
-
-        <div className="hero-panel">
-          <p className="hero-panel__eyebrow">Detected tempo</p>
-          <div className="bpm-readout" role="group" aria-label={bpmAriaLabel}>
-            <span className="bpm-readout__value" aria-hidden="true">
-              {displayBpm ?? '--'}
-            </span>
-          </div>
-          <p className="hero-panel__unit" aria-hidden="true">
+        <div className="bpm-readout" role="group" aria-label={bpmAriaLabel} data-just-locked={justLocked}>
+          {metronomeActive && metronomePosition ? (
+            <span
+              key={`click-${metronomePosition.barIndex}-${metronomePosition.beatInBar}`}
+              className="bpm-readout__ring bpm-readout__ring--flash"
+              aria-hidden="true"
+            />
+          ) : continuity.status === 'locked' && continuity.displayedBpm ? (
+            <span
+              key={`tempo-${Math.round(continuity.displayedBpm)}`}
+              className="bpm-readout__ring bpm-readout__ring--pulse"
+              style={{ animationDuration: `${60000 / continuity.displayedBpm}ms` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <span className="bpm-readout__value" aria-hidden="true">
+            {displayBpm ?? '--'}
+          </span>
+          <span className="bpm-readout__unit" aria-hidden="true">
             BPM
-          </p>
-
-          <div className="hero-panel__divider" />
-
-          <div className="hero-panel__graph">
-            <p className="hero-panel__graph-caption">
-              Tempo history
-              {bpmHistory.length > 0 && ` · ${bpmHistory[bpmHistory.length - 1].bpm.toFixed(1)} BPM`}
-            </p>
-            <TempoGraph history={bpmHistory} />
-          </div>
-
-          {engineState.frozen && (
-            <>
-              <div className="hero-panel__divider" />
-              <p className="hero-panel__status">
-                <span className="hero-panel__status-dot" aria-hidden="true" />
-                Locked for this session
-              </p>
-            </>
-          )}
+          </span>
         </div>
 
-        {metronomeActive && metronomePosition && (
-          <div className="beat-indicator">
-            <div
-              className="beat-indicator__pills"
-              role="img"
-              aria-label={`Beat ${metronomePosition.beatInBar + 1} of ${settings.beatsPerBar}`}
-            >
-              {Array.from({ length: settings.beatsPerBar }, (_, i) => (
-                <span
-                  key={i}
-                  className="beat-indicator__pill"
-                  data-active={i === metronomePosition.beatInBar}
-                  aria-hidden="true"
-                >
-                  {i + 1}
-                </span>
-              ))}
-            </div>
-            <div className="beat-indicator__caption">
-              <span>Bar {metronomePosition.barIndex + 1}</span>
-              <span>
-                Beat {metronomePosition.beatInBar + 1} of {settings.beatsPerBar}
-              </span>
+        <div className="meter-row">
+          <div className="meter">
+            <span className="meter__label">Confidence</span>
+            <div className="meter__track">
+              <div
+                className={`meter__fill meter__fill--${statusClass}`}
+                style={{ width: `${confidencePercent}%` }}
+              />
             </div>
           </div>
+          <div className="meter">
+            <span className="meter__label">Signal</span>
+            <div className="meter__track">
+              <div className="meter__fill meter__fill--signal" style={{ width: `${signalPercent}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {isListening && (
+          <details className="diagnostics-disclosure">
+            <summary>Diagnostics</summary>
+            <p className="notice notice--diagnostic">
+              {engineState.onsetCount} onsets · {confidencePercent}% confidence · {signalPercent}% signal
+              {engineState.candidates.length > 0 && (
+                <>
+                  {' · candidates: '}
+                  {engineState.candidates
+                    .map((c) => `${Math.round(c.bpm)} (${Math.round(c.score * 100)}%, n=${c.supportCount})`)
+                    .join(', ')}
+                </>
+              )}
+            </p>
+          </details>
         )}
 
         {isListening && settings.metronomeBars > 0 && !metronomeActive && (
@@ -313,7 +322,20 @@ function App() {
           <p className="notice notice--metronome">
             Click track at {clickTrackBpm !== null ? clickTrackBpm.toFixed(1) : '--'} BPM
             {feel !== 1 && ` (${formatFeel(feel)} feel)`}
+            {metronomePosition && (
+              <>
+                {' · Bar '}
+                {metronomePosition.barIndex + 1}
+                {metronomePosition.remainingBars !== null && ` (${metronomePosition.remainingBars} left)`}
+                {' · Beat '}
+                {metronomePosition.beatInBar + 1}/{settings.beatsPerBar}
+              </>
+            )}
           </p>
+        )}
+
+        {engineState.frozen && (
+          <p className="notice notice--locked">🔒 Locked for this session — won't re-detect until you stop listening</p>
         )}
 
         {!isMicrophoneSupported && (
@@ -393,33 +415,23 @@ function App() {
               </>
             ),
             start: (
-              <div className="playback-row">
-                <div className="playback-row__item">
-                  <button
-                    type="button"
-                    className={`big-button playback-row__button ${isListening ? 'big-button--stop' : 'big-button--start'}`}
-                    onClick={isListening ? stop : start}
-                    disabled={!isMicrophoneSupported}
-                  >
-                    {isListening ? 'Stop listening' : 'Start listening'}
-                  </button>
-                  <p className="playback-row__caption">{engineState.frozen ? 'Detection locked' : isListening ? 'Listening…' : 'Not listening'}</p>
-                </div>
-                <div className="playback-row__item">
-                  <button
-                    type="button"
-                    className={`big-button playback-row__button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
-                    onClick={metronomeActive ? stopMetronome : playManualClick}
-                  >
-                    {metronomeActive ? 'Stop click' : 'Play click'}
-                  </button>
-                  <p className="playback-row__caption">{metronomeActive ? 'Click playing' : 'Click stopped'}</p>
-                </div>
-              </div>
+              <button
+                type="button"
+                className={`big-button ${isListening ? 'big-button--stop' : 'big-button--start'}`}
+                onClick={isListening ? stop : start}
+                disabled={!isMicrophoneSupported}
+              >
+                {isListening ? 'Stop Listening' : 'Start Listening'}
+              </button>
+            ),
+            graph: isListening ? (
+              <TempoGraph history={bpmHistory} />
+            ) : (
+              <p className="settings-note" style={{ textAlign: 'center' }}>Start Listening to see the live tempo graph.</p>
             ),
             tap: (
               <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>
-                Tap tempo
+                Tap Tempo
               </button>
             ),
             click: (
@@ -576,6 +588,13 @@ function App() {
                   value={manualBpm}
                   onChange={(e) => setManualBpm(Number(e.target.value))}
                 />
+                <button
+                  type="button"
+                  className={`big-button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
+                  onClick={metronomeActive ? stopMetronome : playManualClick}
+                >
+                  {metronomeActive ? 'Stop Click' : 'Play Click'}
+                </button>
               </div>
             ),
           };
@@ -585,7 +604,7 @@ function App() {
               key={id}
               className="main-section"
               data-dragging={mainDraggingIndex === index}
-              draggable={arrangeMode}
+              draggable
               onDragStart={() => setMainDraggingIndex(index)}
               onDragEnd={() => setMainDraggingIndex(null)}
               onDragOver={(e) => e.preventDefault()}
@@ -597,137 +616,81 @@ function App() {
                 setMainDraggingIndex(null);
               }}
             >
-              {arrangeMode ? (
-                <div className="main-section__handle">
-                  <span className="main-section__grip" aria-hidden="true">
-                    ⠿
-                  </span>
-                  <span className="main-section__title">{MAIN_SECTION_TITLES[id]}</span>
-                  <div className="main-section__reorder">
-                    <button
-                      type="button"
-                      className="settings-section__reorder-btn"
-                      onClick={() => reorderMainSections(index, index - 1)}
-                      disabled={index === 0}
-                      aria-label={`Move ${MAIN_SECTION_TITLES[id]} up`}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      className="settings-section__reorder-btn"
-                      onClick={() => reorderMainSections(index, index + 1)}
-                      disabled={index === mainSectionOrder.length - 1}
-                      aria-label={`Move ${MAIN_SECTION_TITLES[id]} down`}
-                    >
-                      ▼
-
+              <div className="main-section__handle">
+                <span className="main-section__grip" aria-hidden="true">
+                  ⠿
+                </span>
+                <span className="main-section__title">{MAIN_SECTION_TITLES[id]}</span>
+                <div className="main-section__reorder">
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderMainSections(index, index - 1)}
+                    disabled={index === 0}
+                    aria-label={`Move ${MAIN_SECTION_TITLES[id]} up`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-section__reorder-btn"
+                    onClick={() => reorderMainSections(index, index + 1)}
+                    disabled={index === mainSectionOrder.length - 1}
+                    aria-label={`Move ${MAIN_SECTION_TITLES[id]} down`}
+                  >
+                    ▼
                   </button>
                 </div>
               </div>
-              ) : (
-                <span className="sr-only">{MAIN_SECTION_TITLES[id]}</span>
-              )}
               <div className="main-section__body">{mainSectionContent[id]}</div>
             </div>
           ));
         })()}
         </section>
 
-        <div className="bottom-accordion">
-          <details className="bottom-accordion__item">
-            <summary>Sound &amp; detection settings</summary>
-            <div className="bottom-accordion__body">
-              <p className="settings-note">Sound kits, detector sensitivity, tempo ramp, and appearance live in full Settings.</p>
-              <button type="button" className="pill-button" onClick={() => setSettingsOpen(true)}>
-                Open Settings
-              </button>
-            </div>
-          </details>
+        <div className="setlist">
+          <div className="setlist__save-row">
+            <input
+              type="text"
+              className="setlist__name-input"
+              aria-label="Preset name"
+              placeholder="Save current setup as…"
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSavePreset();
+              }}
+            />
+            <button
+              type="button"
+              className="pill-button"
+              onClick={handleSavePreset}
+              disabled={!newPresetName.trim()}
+              aria-label="Save current setup as a new preset"
+            >
+              Save
+            </button>
+          </div>
 
-          <details className="bottom-accordion__item">
-            <summary>Diagnostics</summary>
-            <div className="bottom-accordion__body">
-              <div className="meter-row">
-                <div className="meter">
-                  <span className="meter__label">Confidence</span>
-                  <div className="meter__track">
-                    <div
-                      className={`meter__fill meter__fill--${statusClass}`}
-                      style={{ width: `${confidencePercent}%` }}
-                    />
-                  </div>
+          {presets.length > 0 && (
+            <div className="setlist__chips">
+              {presets.map((preset) => (
+                <div key={preset.id} className="setlist__chip">
+                  <button type="button" className="setlist__chip-name" onClick={() => loadPreset(preset.id)}>
+                    {preset.name} · {preset.data.manualBpm} BPM
+                  </button>
+                  <button
+                    type="button"
+                    className="setlist__chip-remove"
+                    onClick={() => removePreset(preset.id)}
+                    aria-label={`Delete ${preset.name}`}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div className="meter">
-                  <span className="meter__label">Signal</span>
-                  <div className="meter__track">
-                    <div className="meter__fill meter__fill--signal" style={{ width: `${signalPercent}%` }} />
-                  </div>
-                </div>
-              </div>
-              {isListening && (
-                <p className="notice notice--diagnostic">
-                  {engineState.onsetCount} onsets · {confidencePercent}% confidence · {signalPercent}% signal
-                  {engineState.candidates.length > 0 && (
-                    <>
-                      {' · candidates: '}
-                      {engineState.candidates
-                        .map((c) => `${Math.round(c.bpm)} (${Math.round(c.score * 100)}%, n=${c.supportCount})`)
-                        .join(', ')}
-                    </>
-                  )}
-                </p>
-              )}
+              ))}
             </div>
-          </details>
-
-          <details className="bottom-accordion__item">
-            <summary>Save setup</summary>
-            <div className="bottom-accordion__body setlist">
-              <div className="setlist__save-row">
-                <input
-                  type="text"
-                  className="setlist__name-input"
-                  aria-label="Preset name"
-                  placeholder="Save current setup as…"
-                  value={newPresetName}
-                  onChange={(e) => setNewPresetName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSavePreset();
-                  }}
-                />
-                <button
-                  type="button"
-                  className="pill-button"
-                  onClick={handleSavePreset}
-                  disabled={!newPresetName.trim()}
-                  aria-label="Save current setup as a new preset"
-                >
-                  Save
-                </button>
-              </div>
-
-              {presets.length > 0 && (
-                <div className="setlist__chips">
-                  {presets.map((preset) => (
-                    <div key={preset.id} className="setlist__chip">
-                      <button type="button" className="setlist__chip-name" onClick={() => loadPreset(preset.id)}>
-                        {preset.name} · {preset.data.manualBpm} BPM
-                      </button>
-                      <button
-                        type="button"
-                        className="setlist__chip-remove"
-                        onClick={() => removePreset(preset.id)}
-                        aria-label={`Delete ${preset.name}`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </details>
+          )}
         </div>
       </main>
 
