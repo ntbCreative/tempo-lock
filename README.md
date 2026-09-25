@@ -307,6 +307,29 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Sections separated again, modern button treatment (this build)**:
+  after the full redesign moved to pure spacing for separation, feedback
+  was that the sections needed clearer visual separation back — now each
+  main-screen section is a borderless card (a background-color lift +
+  soft shadow, not a heavy 1px outline), and buttons/toggles got a subtle
+  gradient sheen, a bit more elevation, and a proper hover lift, for a
+  more contemporary feel. Fixed a real contrast issue this surfaced:
+  since section cards now use the same background tier form controls
+  used to sit on, controls inside a card (selects, the BPM box, ½×/2×,
+  Play Click) needed their own distinct tier (`--bg-control`) so they
+  don't blend into the card behind them. Light and dark mode both
+  updated to match, and the comparison mockup was refreshed to reflect
+  the actual current look.
+- **Live tempo graph (this build)**: matching the "Variation Tracker"
+  in BPM Detector and the tempo curve in Live BPM — a new reorderable
+  main-screen section, "Tempo graph," showing the last 60 seconds of
+  detected BPM as a live line chart. Auto-scales to whatever range was
+  actually observed, so even small wobbles stay visible rather than
+  getting lost against a fixed 40-240 axis. Shows tempo *stability* over
+  time, not just the instant number. Sampled roughly once a second (not
+  every engine tick) so it reads as a trend, not raw jitter; clears on
+  Stop Listening so each session starts fresh. Pure SVG, no charting
+  library.
 - **Always-listening on app open (this build)**: matching apps like BPM
   Detector and Live BPM — the app now automatically starts listening as
   soon as it opens and mic permission is actually granted, instead of

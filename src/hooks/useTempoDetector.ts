@@ -27,6 +27,8 @@ import { addPreset, updatePreset, deletePreset, findPreset, type Preset } from '
 const POSITION_POLL_MS = 100;
 
 const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
+/** Rolling window (seconds) kept for the live tempo graph. */
+const GRAPH_WINDOW_SEC = 60;
 const THEME_STORAGE_KEY = 'tempo-lock:theme';
 const COLOR_SCHEME_STORAGE_KEY = 'tempo-lock:color-scheme';
 const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
@@ -38,9 +40,9 @@ export type SettingsSectionId = 'detector' | 'clickTrack' | 'sounds' | 'practice
 export const DEFAULT_SECTION_ORDER: SettingsSectionId[] = ['detector', 'clickTrack', 'sounds', 'practice', 'appearance'];
 
 /** The main screen's reorderable blocks, below the fixed BPM readout/meters, which always stay anchored at the top. */
-export type MainSectionId = 'mode' | 'start' | 'tap' | 'click';
+export type MainSectionId = 'mode' | 'start' | 'tap' | 'click' | 'graph';
 
-export const DEFAULT_MAIN_SECTION_ORDER: MainSectionId[] = ['mode', 'start', 'tap', 'click'];
+export const DEFAULT_MAIN_SECTION_ORDER: MainSectionId[] = ['mode', 'start', 'graph', 'tap', 'click'];
 
 export interface DetectorSettings {
   smoothing: number;
@@ -168,6 +170,13 @@ export function useTempoDetector() {
   const [tapState, setTapState] = useState<TapTempoState>(createTapTempoState());
   const [metronomeActive, setMetronomeActive] = useState(false);
   const [metronomeBpm, setMetronomeBpm] = useState<number | null>(null);
+  // A rolling window of {t, bpm} samples for the live tempo graph (like
+  // BPM Detector's "Variation Tracker" / Live BPM's tempo curve) -- shows
+  // stability over time, not just the instant reading. Sampled roughly
+  // once a second (not every engine tick) so the graph reads as a trend,
+  // not raw jitter.
+  const [bpmHistory, setBpmHistory] = useState<{ t: number; bpm: number }[]>([]);
+  const lastGraphSampleRef = useRef(0);
   const [metronomePosition, setMetronomePosition] = useState<MetronomePosition | null>(null);
   const [feel, setFeelState] = useState<FeelMultiplier>(1);
   const [manualBpm, setManualBpmState] = useState(120);
@@ -295,7 +304,23 @@ export function useTempoDetector() {
           barCountdownRef.current = createBarCountdownState();
           stabilityTriggeredRef.current = false;
           autoStartSuppressedRef.current = false; // a fresh session can always auto-start again
+          setBpmHistory([]);
+          lastGraphSampleRef.current = 0;
           return;
+        }
+
+        if (state.continuity.displayedBpm !== null) {
+          const nowSec = performance.now() / 1000;
+          if (nowSec - lastGraphSampleRef.current >= 1) {
+            lastGraphSampleRef.current = nowSec;
+            const bpm = state.continuity.displayedBpm;
+            setBpmHistory((prev) => {
+              const cutoff = nowSec - GRAPH_WINDOW_SEC;
+              const next = prev.filter((p) => p.t >= cutoff);
+              next.push({ t: nowSec, bpm });
+              return next;
+            });
+          }
         }
 
         if (autoStartSuppressedRef.current) {
@@ -678,6 +703,7 @@ export function useTempoDetector() {
     mainSectionOrder,
     reorderMainSections,
     engineState,
+    bpmHistory,
     start,
     stop,
     tapState,

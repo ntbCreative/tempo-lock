@@ -5,6 +5,10 @@
      a few feet away, on a stage). */
   --bg: #10121a;
   --bg-raised: #1a1d28;
+  /* One tier up from --bg-raised, for form controls/buttons that sit
+     INSIDE a card -- needs to be visibly distinct from the card's own
+     background, not the same color. */
+  --bg-control: #242835;
   --line: #262a38;
   --text: #f4f5f7;
   --text-dim: #8892a6;
@@ -35,6 +39,7 @@
 [data-scheme='light'] {
   --bg: #f6f5f1;
   --bg-raised: #ffffff;
+  --bg-control: #f1efe9;
   --line: #e3e0d8;
   --text: #16181d;
   --text-dim: #6b7080;
@@ -391,7 +396,7 @@ body {
 }
 
 .big-button--stop-metronome {
-  background: var(--bg-raised);
+  background: var(--bg-control);
   color: var(--secondary);
   border: 1px solid var(--secondary-dim);
 }
@@ -406,33 +411,34 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 90ms var(--ease), box-shadow 90ms var(--ease), filter 140ms var(--ease);
+  box-shadow: var(--shadow-md);
+  transition: transform 110ms var(--ease), box-shadow 110ms var(--ease), filter 140ms var(--ease);
 }
 
 .big-button:active {
   transform: scale(0.98);
-  box-shadow: none;
+  box-shadow: var(--shadow-sm);
 }
 
 @media (hover: hover) {
   .big-button:hover {
-    filter: brightness(1.08);
+    transform: translateY(-1px);
+    filter: brightness(1.06);
   }
 }
 
 .big-button--start {
-  background: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)), var(--accent);
   color: #1a1200;
 }
 
 .big-button--stop {
-  background: var(--red);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)), var(--red);
   color: #260603;
 }
 
 .big-button--tap {
-  background: var(--bg-raised);
+  background: var(--bg-control);
   color: var(--text);
   border: 1px solid var(--line);
 }
@@ -473,7 +479,7 @@ body {
   width: 100%;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  background: var(--bg-raised);
+  background: var(--bg-control);
   color: var(--text);
   border: 1px solid var(--line);
   font-size: 15px;
@@ -518,7 +524,7 @@ body {
   align-items: baseline;
   justify-content: center;
   gap: 8px;
-  background: var(--bg-raised);
+  background: var(--bg-control);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 10px;
@@ -583,7 +589,7 @@ body {
 .mode-toggle__option {
   flex: 1;
   padding: 12px;
-  background: var(--bg-raised);
+  background: var(--bg-control);
   color: var(--text-dim);
   border: none;
   font-size: 15px;
@@ -597,7 +603,7 @@ body {
 }
 
 .mode-toggle__option[data-active='true'] {
-  background: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)), var(--accent);
   color: #1a1200;
 }
 
@@ -609,14 +615,14 @@ body {
 .pill-button {
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  background: var(--bg-raised);
+  background: var(--bg-control);
   color: var(--text);
   border: 1px solid var(--line);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: transform 90ms var(--ease), background 90ms var(--ease), box-shadow 90ms var(--ease);
+  transition: transform 110ms var(--ease), background 110ms var(--ease), box-shadow 110ms var(--ease), border-color 110ms var(--ease);
 }
 
 .pill-button:active {
@@ -624,14 +630,20 @@ body {
   box-shadow: none;
 }
 
+@media (hover: hover) {
+  .pill-button:hover {
+    border-color: var(--accent);
+  }
+}
+
 .pill-button[data-active='true'] {
-  background: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)), var(--accent);
   color: #1a1200;
   border-color: var(--accent);
 }
 
 .big-button--manual-click {
-  background: var(--secondary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)), var(--secondary);
   color: #04211f;
 }
 
@@ -772,13 +784,15 @@ body {
   color: var(--text-dim);
 }
 
-/* Reorderable main-screen sections. Deliberately NOT boxed cards --
-   structure comes from generous spacing and a quiet label, not borders
-   and shadows around every block. The drag handle stays functional but
-   visually minimal. */
+/* Reorderable main-screen sections, as modern borderless cards -- a
+   gentle background-color lift and soft shadow give each section a
+   clear edge without heavy 1px borders around everything. */
 .main-section {
   width: 100%;
   max-width: 420px;
+  background: var(--bg-raised);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .main-section[data-dragging='true'] {
@@ -789,7 +803,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 2px 10px;
+  padding: 14px 18px 4px;
   cursor: grab;
 }
 
@@ -818,6 +832,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  padding: 10px 18px 20px;
 }
 
 .settings-section__reorder {

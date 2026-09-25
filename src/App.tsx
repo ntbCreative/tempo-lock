@@ -10,9 +10,54 @@ import './App.css';
 const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
   mode: 'Detection mode',
   start: 'Listen',
+  graph: 'Tempo graph',
   tap: 'Tap tempo',
   click: 'Click track',
 };
+
+/** A small live line chart of recent detected BPM -- shows tempo stability over time, not just the instant reading. Auto-scales to the observed range so even small wobbles stay visible. */
+function TempoGraph({ history }: { history: { t: number; bpm: number }[] }): ReactElement {
+  if (history.length < 2) {
+    return (
+      <p className="settings-note" style={{ textAlign: 'center' }}>
+        Keep playing — the graph fills in as tempo is tracked.
+      </p>
+    );
+  }
+
+  const width = 320;
+  const height = 90;
+  const bpms = history.map((p) => p.bpm);
+  const minBpm = Math.min(...bpms);
+  const maxBpm = Math.max(...bpms);
+  const padding = Math.max(1, (maxBpm - minBpm) * 0.2);
+  const yMin = minBpm - padding;
+  const yMax = maxBpm + padding;
+  const tMin = history[0].t;
+  const tMax = history[history.length - 1].t;
+  const tRange = Math.max(1, tMax - tMin);
+
+  const points = history
+    .map((p) => {
+      const x = ((p.t - tMin) / tRange) * width;
+      const y = height - ((p.bpm - yMin) / (yMax - yMin)) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  const latest = history[history.length - 1].bpm;
+
+  return (
+    <div style={{ width: '100%' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden="true">
+        <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      <p className="settings-note" style={{ textAlign: 'center' }}>
+        Last {Math.round(tRange)}s · {minBpm.toFixed(1)}–{maxBpm.toFixed(1)} BPM · now {latest.toFixed(1)}
+      </p>
+    </div>
+  );
+}
 
 /** Formats a feel multiplier for display: 2 -> "2×", 0.5 -> "½×", 0.25 -> "¼×", 0.125 -> "⅛×". */
 function formatFeel(feel: number): string {
@@ -59,6 +104,7 @@ function App() {
     mainSectionOrder,
     reorderMainSections,
     engineState,
+    bpmHistory,
     start,
     stop,
     tapState,
@@ -377,6 +423,11 @@ function App() {
               >
                 {isListening ? 'Stop Listening' : 'Start Listening'}
               </button>
+            ),
+            graph: isListening ? (
+              <TempoGraph history={bpmHistory} />
+            ) : (
+              <p className="settings-note" style={{ textAlign: 'center' }}>Start Listening to see the live tempo graph.</p>
             ),
             tap: (
               <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>
