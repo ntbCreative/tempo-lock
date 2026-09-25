@@ -307,6 +307,15 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Auto-start click: a clear on/off toggle (this build)**: previously,
+  "just use the app for BPM detection" meant knowing to set "Auto-start
+  after" to "Off" in a dropdown — not obvious. Split into a plain
+  checkbox, "Auto-start click," with a one-line explanation of what each
+  state means, plus the bar-count/"Once stable" detail dropdown appearing
+  only when it's on. Toggling off and back on restores whatever detail
+  was last chosen (remembered for the session) rather than resetting to
+  a default. Live/Recording detection mode is unaffected either way —
+  this only changes whether the *click* ever starts on its own.
 - **Full visual redesign: "precision instrument" instead of vintage
   hardware (this build)**: a request for a genuinely different look — one
   that reads as professional and easy to use, not just refined —

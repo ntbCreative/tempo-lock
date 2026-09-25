@@ -150,7 +150,7 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
         </p>
       )}
 
-      <p className="settings-note">Auto-start after now lives on the main screen too, next to the click controls.</p>
+      <p className="settings-note">Auto-start click now lives on the main screen too, next to the click controls.</p>
 
       <div className="control">
         <div className="control__label-row">

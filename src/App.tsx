@@ -88,7 +88,19 @@ function App() {
   const [newPresetName, setNewPresetName] = useState('');
   const [announcement, setAnnouncement] = useState('');
   const [mainDraggingIndex, setMainDraggingIndex] = useState<number | null>(null);
+  // Remembers the last non-"Off" auto-start choice (bars or "Once stable"),
+  // so toggling Auto-start click off and back on restores what was picked
+  // rather than always resetting to a fixed default.
+  const [lastAutoStartBars, setLastAutoStartBars] = useState<Exclude<BarCount, 0>>(
+    settings.metronomeBars !== 0 ? settings.metronomeBars : 2
+  );
   const prevMetronomeActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (settings.metronomeBars !== 0) {
+      setLastAutoStartBars(settings.metronomeBars);
+    }
+  }, [settings.metronomeBars]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -312,19 +324,34 @@ function App() {
 
                 <div className="control auto-start-control">
                   <div className="control__label-row">
-                    <label htmlFor="metronome-bars-main">Auto-start after</label>
+                    <label htmlFor="auto-start-toggle">Auto-start click</label>
+                    <input
+                      id="auto-start-toggle"
+                      type="checkbox"
+                      checked={settings.metronomeBars !== 0}
+                      onChange={(e) =>
+                        updateSettings({ metronomeBars: e.target.checked ? lastAutoStartBars : 0 })
+                      }
+                    />
                   </div>
-                  <select
-                    id="metronome-bars-main"
-                    value={settings.metronomeBars}
-                    onChange={(e) => updateSettings({ metronomeBars: Number(e.target.value) as BarCount })}
-                  >
-                    {BAR_COUNT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <p className="settings-note">
+                    {settings.metronomeBars === 0
+                      ? 'Off: just shows the detected BPM — the click never starts on its own.'
+                      : 'On: the click track starts automatically once detection meets the condition below.'}
+                  </p>
+                  {settings.metronomeBars !== 0 && (
+                    <select
+                      id="metronome-bars-main"
+                      value={settings.metronomeBars}
+                      onChange={(e) => updateSettings({ metronomeBars: Number(e.target.value) as BarCount })}
+                    >
+                      {BAR_COUNT_OPTIONS.filter((option) => option.value !== 0).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </>
             ),
