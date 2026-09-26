@@ -307,6 +307,20 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Width consistency, button symmetry, Tap+Click pairing (this build)**:
+  refined against a second reference screenshot —
+  (1) Every section (hero panel, beat indicator, listen row, main
+  sections) now shares the exact same 640px max-width; two of them
+  (hero panel, beat indicator) had been left at an old 600px from an
+  earlier pass, so they visually didn't line up with everything else.
+  (2) Start Listening + Reset are now equal width (was 3:1, now 1:1),
+  matching the symmetrical two-button style used elsewhere.
+  (3) Tap Tempo now sits beside Play/Stop Click as a paired, equal-width
+  row instead of Tap Tempo being a standalone full-width button with
+  Play Click buried at the bottom of a separate section.
+  (4) Click mode and Subdivision (both compact dropdowns) are now a
+  two-column row instead of each taking its own full-width line —
+  better use of the space, matching the reference's layout.
 - **Detection actually stops when auto-start triggers; graph gets numbers;
   full width; Reset button (this build)**: several fixes and additions
   together —

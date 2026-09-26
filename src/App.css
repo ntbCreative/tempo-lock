@@ -237,7 +237,7 @@ body {
    with plain text and a static dot, not motion. */
 .hero-panel {
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
   background: var(--hero-bg);
   border: 1px solid var(--hero-border);
   border-radius: var(--radius-lg);
@@ -396,19 +396,18 @@ body {
 }
 
 .listen-row__main {
-  flex: 3;
+  flex: 1;
   max-width: none;
 }
 
 .listen-row__reset {
   flex: 1;
   max-width: none;
-  font-size: 16px;
 }
 
 .beat-indicator {
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -620,6 +619,18 @@ body {
   flex-direction: column;
   gap: 18px;
   margin-top: 8px;
+}
+
+/* Pairs two compact controls (Click mode + Subdivision) side by side
+   instead of each taking a full-width row on its own -- better use of
+   the available width, matching the reference's two-column layout. */
+.control-row {
+  display: flex;
+  gap: 12px;
+}
+
+.control-row > .control {
+  flex: 1;
 }
 
 /* A quiet visual break between the mode-selection controls (Click mode,

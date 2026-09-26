@@ -10,7 +10,7 @@ import './App.css';
 const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
   mode: 'Detection mode',
   start: 'Playback controls',
-  tap: 'Tap tempo',
+  tap: 'Tap tempo & click',
   click: 'Click track settings',
 };
 
@@ -471,44 +471,60 @@ function App() {
               </div>
             ),
             tap: (
-              <button type="button" className="big-button big-button--tap" onClick={tap} onDoubleClick={resetTap}>
-                Tap tempo
-              </button>
+              <div className="listen-row">
+                <button
+                  type="button"
+                  className="big-button big-button--tap listen-row__main"
+                  onClick={tap}
+                  onDoubleClick={resetTap}
+                >
+                  Tap tempo
+                </button>
+                <button
+                  type="button"
+                  className={`big-button listen-row__reset ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
+                  onClick={metronomeActive ? stopMetronome : playManualClick}
+                >
+                  {metronomeActive ? 'Stop Click' : 'Play Click'}
+                </button>
+              </div>
             ),
             click: (
               <div className="manual-metronome">
-                <div className="control click-mode-control">
-                  <div className="control__label-row">
-                    <label htmlFor="accent-mode-main">Click mode</label>
+                <div className="control-row">
+                  <div className="control click-mode-control">
+                    <div className="control__label-row">
+                      <label htmlFor="accent-mode-main">Click mode</label>
+                    </div>
+                    <select
+                      id="accent-mode-main"
+                      value={settings.accentMode}
+                      onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
+                    >
+                      {ACCENT_MODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    id="accent-mode-main"
-                    value={settings.accentMode}
-                    onChange={(e) => updateSettings({ accentMode: e.target.value as AccentMode })}
-                  >
-                    {ACCENT_MODE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
-                <div className="control click-mode-control">
-                  <div className="control__label-row">
-                    <label htmlFor="subdivision-main">Subdivision</label>
+                  <div className="control click-mode-control">
+                    <div className="control__label-row">
+                      <label htmlFor="subdivision-main">Subdivision</label>
+                    </div>
+                    <select
+                      id="subdivision-main"
+                      value={settings.subdivision}
+                      onChange={(e) => updateSettings({ subdivision: e.target.value as Subdivision })}
+                    >
+                      {SUBDIVISION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    id="subdivision-main"
-                    value={settings.subdivision}
-                    onChange={(e) => updateSettings({ subdivision: e.target.value as Subdivision })}
-                  >
-                    {SUBDIVISION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 {settings.accentMode === 'backbeat' && (
@@ -629,13 +645,6 @@ function App() {
                   value={manualBpm}
                   onChange={(e) => setManualBpm(Number(e.target.value))}
                 />
-                <button
-                  type="button"
-                  className={`big-button ${metronomeActive ? 'big-button--stop-metronome' : 'big-button--manual-click'}`}
-                  onClick={metronomeActive ? stopMetronome : playManualClick}
-                >
-                  {metronomeActive ? 'Stop Click' : 'Play Click'}
-                </button>
               </div>
             ),
           };
