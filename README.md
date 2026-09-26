@@ -307,6 +307,18 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Fixed the ½×/BPM/2× row actually shrinking instead of filling the
+  section (this build)**: `.manual-metronome` (the wrapper around the
+  whole click-track control area) was missing `width: 100%` — its parent
+  centers its children rather than stretching them, so without that,
+  everything inside shrank to content size instead of using the
+  section's available width. That's why the nudge row (−1/+1 BPM, which
+  did have its own explicit width) looked fine while the row above it
+  (½×/BPM/2×) looked squeezed into the middle with gaps on both sides.
+  Also brought the ½×/2× buttons up to the same size as −1/+1 BPM
+  (`pill-button--nudge` instead of plain `pill-button`) so both rows
+  read as one consistent, symmetrical control cluster rather than one
+  row looking prominent and the other looking like an afterthought.
 - **Width consistency, button symmetry, Tap+Click pairing (this build)**:
   refined against a second reference screenshot —
   (1) Every section (hero panel, beat indicator, listen row, main

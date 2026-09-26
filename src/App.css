@@ -615,6 +615,8 @@ body {
 }
 
 .manual-metronome {
+  width: 100%;
+  max-width: 640px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -649,6 +651,7 @@ body {
 .manual-metronome__bpm-row {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 12px;
 }
 

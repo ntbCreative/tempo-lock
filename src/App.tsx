@@ -549,7 +549,7 @@ function App() {
                 <div className="manual-metronome__bpm-row">
                   <button
                     type="button"
-                    className="pill-button"
+                    className="pill-button pill-button--nudge"
                     onClick={metronomeActive ? () => setFeel(halveFeel(feel)) : halveManualBpm}
                     aria-label={metronomeActive ? 'Halve click rate' : 'Halve tempo'}
                     aria-pressed={metronomeActive ? feel < 1 : undefined}
@@ -576,7 +576,7 @@ function App() {
                   </div>
                   <button
                     type="button"
-                    className="pill-button"
+                    className="pill-button pill-button--nudge"
                     onClick={metronomeActive ? () => setFeel(doubleFeel(feel)) : doubleManualBpm}
                     aria-label={metronomeActive ? 'Double click rate' : 'Double tempo'}
                     aria-pressed={metronomeActive ? feel > 1 : undefined}
