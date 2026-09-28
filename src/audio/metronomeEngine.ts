@@ -1,3 +1,4 @@
+import { syncDownbeatToTap } from '../lib/clickSync';
 import { computeSessionPosition, blendTowards } from '../lib/metronomeSchedule';
 import {
   resolveClickSound,
@@ -55,6 +56,8 @@ export class MetronomeEngine {
   private nextClickIndex = 0;
   private nextClickTimePerfSec = 0;
   private nextSubTick = 0;
+  /** Time of the most recent tick handed to the audio graph -- ticks already queued can't be recalled, so a re-sync must stay clear of it. */
+  private lastTickTimePerfSec: number | null = null;
   private subdivisionTicks = 1;
   private feel: FeelMultiplier = DEFAULT_FEEL;
   private beatCycleCounter = 0;
@@ -106,6 +109,34 @@ export class MetronomeEngine {
   nudgeBpm(deltaBpm: number, minBpm = 40, maxBpm = 240): void {
     if (!this.running || this.ramp) return;
     this.bpm = Math.min(maxBpm, Math.max(minBpm, this.bpm + deltaBpm));
+  }
+
+  /**
+   * Re-syncs the running click to a tap on beat 1: slides the grid so its
+   * nearest main beat lands exactly on `tapPerfSec` and makes that beat a
+   * downbeat. Tempo is untouched. Only affects ticks not yet queued (those
+   * already handed to the audio graph can't be recalled), so it takes effect
+   * within one lookahead window. Returns how far the grid moved (seconds,
+   * + = later), or null if nothing is playing.
+   */
+  syncDownbeat(tapPerfSec: number): { shiftSec: number } | null {
+    if (!this.running) return null;
+    const result = syncDownbeatToTap(
+      {
+        nextTickTimeSec: this.nextClickTimePerfSec,
+        nextSubTick: this.nextSubTick,
+        ticksPerBeat: effectiveTicksPerBeat(this.subdivisionTicks, this.feel),
+        nextClickIndex: this.nextClickIndex,
+        bpm: this.bpmForClickIndex(this.nextClickIndex),
+        beatsPerBar: this.beatsPerBar,
+      },
+      tapPerfSec,
+      { nowSec: nowSeconds(), lastTickTimeSec: this.lastTickTimePerfSec, minLeadSec: 0.02 }
+    );
+    this.nextClickTimePerfSec = result.phase.nextTickTimeSec;
+    this.nextSubTick = result.phase.nextSubTick;
+    this.nextClickIndex = result.phase.nextClickIndex;
+    return { shiftSec: result.shiftSec };
   }
 
   /**
@@ -201,6 +232,7 @@ export class MetronomeEngine {
     this.beatCycleCounter = 0;
     this.currentTickMuted = false;
     this.hasPlayedAnyClick = false;
+    this.lastTickTimePerfSec = null;
     this.totalBars = options.totalBars ?? 0;
     this.volumeScale = options.volumeScale ?? 1;
     this.subdivisionVolumeScale = options.subdivisionVolumeScale ?? 1;
@@ -314,6 +346,7 @@ export class MetronomeEngine {
         this.nextSubTick = 0;
         this.nextClickIndex += 1;
       }
+      this.lastTickTimePerfSec = this.nextClickTimePerfSec;
       this.nextClickTimePerfSec += 60 / bpmForThisBeat / effectiveTicks;
     }
   }

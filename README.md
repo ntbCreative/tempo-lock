@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (269 tests as of this build).
+Run `npm run test` for the full suite (284 tests as of this build).
 
 ## Known real-world limitations
 
@@ -307,6 +307,31 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **"Sync" button (this build)**: while the click is playing, a
+  button in the click controls re-aligns it to the player: tap it exactly
+  on your downbeat and the click's grid slides so one of its own downbeats
+  lands on the tap. Tempo is untouched -- pure phase and bar-position
+  correction, for a click that started off or has drifted. The tap IS beat
+  1 (not "nearest beat"), so the accent lands where you feel the 1 as well
+  as the timing. Details that matter: uses the pointer-DOWN timestamp
+  (`event.timeStamp`, stamped by the OS as the finger lands) rather than
+  `click`, which only fires on release ~50-100ms later; keyboard activation
+  (click with detail 0) still works. `clickSync.ts` (new, pure, 15 tests)
+  does the math, including the part that is easy to get wrong: the
+  scheduler queues ticks ~100ms ahead into the audio graph and those can't
+  be recalled, so sliding the grid EARLIER could put the next tick before,
+  or nearly on top of, one already queued (a doubled click) or in the past
+  (dropped). After the slide it skips ticks -- advancing the counters
+  exactly as the scheduler would -- until the next is safely in the future
+  and clear of the last queued, so at most a click or two is lost at the
+  moment of correction and everything after is exactly on the new grid.
+  Property tests sweep tempo x meter x subdivision x sub-tick x tap
+  position. **Limits:** it aligns to your TAP, and a tap has its own bias
+  (touch latency, and people naturally tap slightly ahead of a beat), so
+  it can leave a small residual -- fine-tune with Earlier/Later. It does
+  not persist as a timing offset (a one-off phase fix, unlike the
+  Earlier/Later nudge, which carries forward). The engine glue is
+  untested on a device.
 - **Starting the click in time with the player: grid-locked start, lead
   scheduling, and measured sync calibration (this build)**: the request
   was that the auto-started click land exactly in time with playing --

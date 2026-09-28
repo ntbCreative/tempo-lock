@@ -17,6 +17,7 @@ import {
 } from '../lib/metronomeSchedule';
 import { countInStartOnGrid, gridBpm, nextDownbeatOnGrid } from '../lib/beatGrid';
 import { measureLoopbackLatency } from '../lib/syncCalibration';
+import { eventTimeToPerfSec } from '../lib/clickSync';
 import type { BeatGrid } from '../lib/types';
 import { parseCustomAccentBeats, type AccentMode, type SoundKit, type Subdivision } from '../lib/clickPattern';
 import type { TempoRampConfig } from '../lib/tempoRamp';
@@ -202,6 +203,7 @@ export function useTempoDetector() {
   // the normal listening logic (auto-start, session resets) should react to
   // that deliberate test signal.
   const calibratingRef = useRef(false);
+  const [syncFeedback, setSyncFeedback] = useState('');
   const [metronomePosition, setMetronomePosition] = useState<MetronomePosition | null>(null);
   const [feel, setFeelState] = useState<FeelMultiplier>(1);
   const [manualBpm, setManualBpmState] = useState(120);
@@ -285,6 +287,7 @@ export function useTempoDetector() {
     setMetronomeBpm(null);
     setFeelState(1);
     liveTrackingSuppressedRef.current = false;
+    setSyncFeedback('');
     stopPositionPoll();
   }, [stopPositionPoll]);
 
@@ -628,6 +631,26 @@ export function useTempoDetector() {
   }, []);
 
   /**
+   * Re-syncs the running click to a tap on beat 1: the click's grid slides so
+   * a downbeat lands exactly on the tap, without changing tempo. Pass the
+   * pointer event's own timestamp -- it is stamped when the finger lands,
+   * whereas a `click` event only fires on release, ~50-100ms later.
+   */
+  const syncClickToTap = useCallback((eventTimeStampMs?: number) => {
+    const engine = metronomeEngineRef.current;
+    if (!engine || !engine.isRunning()) return;
+    const nowMs = performance.now();
+    const result = engine.syncDownbeat(eventTimeToPerfSec(eventTimeStampMs ?? nowMs, nowMs));
+    if (!result) return;
+    const shiftMs = Math.round(result.shiftSec * 1000);
+    setSyncFeedback(
+      Math.abs(shiftMs) < 2
+        ? 'Already on your beat -- that tap is now beat 1.'
+        : `Re-synced: click moved ${Math.abs(shiftMs)} ms ${shiftMs > 0 ? 'later' : 'earlier'}, and that tap is now beat 1.`
+    );
+  }, []);
+
+  /**
    * Measures the total fixed delay between when a click is scheduled and when
    * this device's own detector hears it -- mic latency, how the input is
    * timestamped, detector bias, and output/Bluetooth latency all at once --
@@ -919,6 +942,8 @@ export function useTempoDetector() {
     resetListening,
     calibrateSync,
     calibration,
+    syncClickToTap,
+    syncFeedback,
     stop,
     tapState,
     tap,
