@@ -313,3 +313,60 @@ describe('continuity: lock stability grows resistance to further change', () => 
     expect(state.displayedBpm).toBe(120);
   });
 });
+
+describe('continuity: deadband and tight-drift damping', () => {
+  it('holds the displayed tempo exactly when the estimate is inside the deadband', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(120.08)); // 0.08 BPM away: below the 0.1 default deadband
+    expect(state.displayedBpm).toBe(120);
+  });
+
+  it('does not let repeated sub-deadband wobble move the display at all', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    const wobble = [120.07, 119.94, 120.05, 119.96, 120.08, 119.93];
+    state = feed(state, wobble.map((b) => evidence(b)));
+    expect(state.displayedBpm).toBe(120);
+  });
+
+  it('still counts a held (in-deadband) update toward lock stability', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(120.05));
+    expect(state.stableTicks).toBe(1);
+  });
+
+  it('damps tight drift more gently than the base smoothing factor', () => {
+    // 121 is ~0.83% away: tight drift. Step should be smoothing(0.25) * scale(0.5) * gap(1) = 0.125.
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(121));
+    expect(state.displayedBpm).toBeCloseTo(120.125, 5);
+  });
+
+  it('follows larger (non-tight) drift with the full smoothing factor so real changes are tracked promptly', () => {
+    // 123.6 is 3% away: above the 1.5% tight threshold but below the 8% major-change threshold.
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(123.6));
+    expect(state.displayedBpm).toBeCloseTo(120 + 0.25 * 3.6, 5);
+  });
+
+  it('reproduces the previous behaviour when deadband and tight damping are disabled', () => {
+    const legacy = { deadbandBpm: 0, tightSmoothingScale: 1 };
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = updateContinuity(state, evidence(120.08), legacy);
+    expect(state.displayedBpm).toBeCloseTo(120 + 0.25 * 0.08, 6);
+    state = updateContinuity(createContinuityState(), evidence(120), legacy);
+    state = updateContinuity(state, evidence(121), legacy);
+    expect(state.displayedBpm).toBeCloseTo(120.25, 6);
+  });
+
+  it('still converges on a genuinely different nearby tempo over time', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = feed(state, Array.from({ length: 40 }, () => evidence(122)));
+    expect(Math.abs((state.displayedBpm ?? 0) - 122)).toBeLessThan(0.15);
+  });
+
+  it('does not affect the major-change consensus path', () => {
+    let state = updateContinuity(createContinuityState(), evidence(120));
+    state = feed(state, [evidence(140), evidence(140), evidence(140)]);
+    expect(state.displayedBpm).toBeCloseTo(140, 0);
+  });
+});

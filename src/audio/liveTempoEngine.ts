@@ -72,7 +72,13 @@ const SAMPLE_RATE_HINT = 44100;
 const FRAME_MS = 20; // energy frame size
 const HOP_MS = 10; // hop between energy frames (50% overlap)
 const ANALYSIS_INTERVAL_MS = 150; // how often we re-run tempo estimation
-const ONSET_HISTORY_SECONDS = 8; // trailing window of onsets fed to the estimator
+// Trailing window of onsets fed to the estimator. Longer is steadier: the
+// beat-grid regression (tempoRefine.ts) gets a longer baseline to average
+// timing jitter over, and the fundamental accumulates more support against
+// its octaves. The cost is responsiveness -- in simulation, following a real
+// 12% tempo change took ~6.7s at 12s vs ~4.9s at 8s. A song-length steady
+// tempo is the common case for this tool, so steadiness wins.
+const ONSET_HISTORY_SECONDS = 12;
 const PULL_BUFFER_SECONDS = 1.5; // how much raw audio we pull from the mic per read
 // Brief silent calibration window right as listening starts: measures the
 // ambient noise floor (room tone, mic self-noise) before trusting any

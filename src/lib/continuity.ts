@@ -54,6 +54,17 @@ export interface ContinuityConfig {
   minOnsetsToAccept: number;
   /** Displayed confidence below this is reported as 'low-confidence' rather than 'locked'. */
   lowConfidenceThreshold: number;
+  /**
+   * Estimates within this many BPM of the displayed tempo are treated as
+   * already agreeing with it: the readout holds instead of nudging. The
+   * display shows one decimal, so sub-0.1 estimate noise would otherwise
+   * flicker the last digit back and forth without any real change in tempo.
+   */
+  deadbandBpm: number;
+  /** Relative gap (fraction of current BPM) at or below which drift counts as "tight" and gets gentler smoothing. */
+  tightDriftThreshold: number;
+  /** Multiplier applied to `smoothing` for tight drift. 1 = no extra damping; below 1 = steadier readout for tiny wobbles. Larger drift still uses full smoothing so a real tempo change is followed promptly. */
+  tightSmoothingScale: number;
 }
 
 export const DEFAULT_CONTINUITY_CONFIG: ContinuityConfig = {
@@ -72,6 +83,9 @@ export const DEFAULT_CONTINUITY_CONFIG: ContinuityConfig = {
   // confidently-accepted-but-wrong initial tempo.
   minOnsetsToAccept: 6,
   lowConfidenceThreshold: 0.4,
+  deadbandBpm: 0.1,
+  tightDriftThreshold: 0.015,
+  tightSmoothingScale: 0.5,
 };
 
 export interface PendingCandidate {
@@ -165,10 +179,12 @@ export function updateContinuity(
     // Small drift: smooth toward it, and treat this as reaffirming the
     // current tempo (clears any pending change-of-tempo candidate). Still
     // the same lock, so stability keeps accumulating.
-    const smoothedBpm = clampBpm(
-      state.displayedBpm + cfg.smoothing * (evidenceBpm - state.displayedBpm),
-      cfg
-    );
+    const absoluteGap = Math.abs(evidenceBpm - state.displayedBpm);
+    const alpha = relativeDiff <= cfg.tightDriftThreshold ? cfg.smoothing * cfg.tightSmoothingScale : cfg.smoothing;
+    const smoothedBpm =
+      absoluteGap <= cfg.deadbandBpm
+        ? state.displayedBpm
+        : clampBpm(state.displayedBpm + alpha * (evidenceBpm - state.displayedBpm), cfg);
     const smoothedConfidence =
       state.confidence + cfg.smoothing * (evidence!.confidence - state.confidence);
     return {

@@ -1,4 +1,5 @@
 import type { TempoCandidate, TempoEstimate } from './types';
+import { refineTempoByRegression } from './tempoRefine';
 
 /**
  * Tempo estimation from a list of onset times (seconds).
@@ -44,6 +45,15 @@ export interface TempoEstimatorConfig {
   tieBreakEpsilon: number;
   /** Winning candidate's raw vote count at/above which confidence reaches 1.0. */
   supportSaturation: number;
+  /**
+   * Refine the chosen tempo's value by regressing onset times onto beat
+   * numbers (see tempoRefine.ts). The cluster mean used otherwise is an
+   * average of single-gap votes, so it inherits the onset detector's timing
+   * jitter and shifts as onsets slide through the window; the regression
+   * uses every onset at once over a long baseline. Only the *value* is
+   * refined -- octave selection above is untouched.
+   */
+  refine: boolean;
 }
 
 export const DEFAULT_ESTIMATOR_CONFIG: TempoEstimatorConfig = {
@@ -54,6 +64,7 @@ export const DEFAULT_ESTIMATOR_CONFIG: TempoEstimatorConfig = {
   maxSpan: 3,
   tieBreakEpsilon: 0.08,
   supportSaturation: 12,
+  refine: true,
 };
 
 function bpmToIntervalMs(bpm: number): number {
@@ -218,8 +229,12 @@ export function estimateTempo(
   // This just rules out a degenerate zero/near-zero-support "winner".
   const coherent = chosen.supportCount >= 2;
 
+  // Tighten the chosen tempo's value using a beat-grid fit across the whole
+  // window. Falls back to the cluster mean whenever no trustworthy fit exists.
+  const refined = cfg.refine ? refineTempoByRegression(onsets, chosen.bpm) : null;
+
   return {
-    bpm: chosen.bpm,
+    bpm: refined ? refined.bpm : chosen.bpm,
     confidence,
     onsetCount: onsets.length,
     coherent,

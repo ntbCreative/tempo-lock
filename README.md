@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (218 tests as of this build).
+Run `npm run test` for the full suite (238 tests as of this build).
 
 ## Known real-world limitations
 
@@ -307,6 +307,53 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Steadier BPM detection: beat-grid regression, longer window, deadband
+  (this build)**: the readout was wandering. Researched how Live BPM,
+  BPM Detector, liveBPM and Tempi describe their approach (store listings
+  only -- marketing copy, not source, so treat as claims) plus the
+  published tempo-tracking literature (autocorrelation/comb-filter
+  periodicity over a multi-second window, Viterbi/median smoothing that
+  penalizes jumps, octave priors, "guided" detection around a reference
+  tempo, sub-0.1 BPM precision only on near-constant tempo). Then read my
+  own estimator to find the actual cause: the BPM value was a *mean of
+  single-gap votes* inside a 35ms cluster, so every gap's timing jitter
+  (+/-10ms on a 500ms beat is +/-2 BPM) passed straight through and the
+  mean shifted as onsets slid through an 8s window; continuity then
+  followed it with a 0.25 EMA per ~150ms tick (a ~0.6s time constant),
+  damping almost nothing. Three changes:
+  (1) `tempoRefine.ts` (new, pure, 12 tests): once the interval-clustering
+  estimator has chosen a tempo/octave, refine its *value* by regressing
+  onset times onto beat numbers, PLL-style (refit after every accepted
+  onset so a coarse start a few % off still locks), rejecting off-grid
+  onsets (ghost notes, noise), trying several early onsets as the anchor
+  (so a stray leading hit can't become the reference), and refusing
+  coincidental sparse grids via a grid-density guard (found because a
+  90 BPM "grid" coincidentally fits every 4th beat of a 120 BPM train).
+  Falls back to the old cluster mean whenever no trustworthy fit exists,
+  and never changes the octave choice.
+  (2) Engine onset window 8s -> 12s (longer regression baseline, more
+  support for the fundamental over its octaves).
+  (3) Continuity: a 0.1 BPM deadband (the readout shows one decimal, so
+  sub-0.1 noise just flickers the last digit) and gentler smoothing for
+  tight (<=1.5%) drift; larger drift still uses full smoothing. Both are
+  config, and `{ deadbandBpm: 0, tightSmoothingScale: 1 }` reproduces the
+  old behaviour exactly (tested).
+  **Measured, synthetically** (simulated sliding-window onset trains:
+  +/-12ms uniform jitter, 10% missed beats, 15% off-beat ghost notes, 12
+  seeds, prior = displayed BPM as in the engine). Controlled 2x2 on raw
+  estimate wobble: refinement alone cuts it ~50-75%, the longer window
+  alone ~12-30%, both ~70-86%. Full pipeline on a steady tempo: readout
+  changes per minute fell from ~65-130 to ~0.1-0.7, worst deviation from
+  0.5-1.2 BPM to <=0.08. **Costs:** following a genuine 12% tempo step
+  went from ~4.9s to ~6.7s, and under a 0.4 BPM/s drift the display lags
+  ~0.75 BPM instead of ~0.47.
+  **Not validated:** this is idealized synthetic data. Real rooms,
+  full-mix playback through speakers, and human tempo drift are noisier,
+  so the real-world size of the improvement is unmeasured -- it needs a
+  test on actual music. Also not done: constraining detection around a
+  tap-tempo "guide" (Live BPM's approach), FFT/spectral-flux onset
+  detection, and Viterbi tempo-path smoothing; those are the next steps
+  if real-world jumping persists.
 - **Fixed the ½×/BPM/2× row actually shrinking instead of filling the
   section (this build)**: `.manual-metronome` (the wrapper around the
   whole click-track control area) was missing `width: 100%` — its parent
