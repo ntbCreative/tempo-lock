@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (238 tests as of this build).
+Run `npm run test` for the full suite (269 tests as of this build).
 
 ## Known real-world limitations
 
@@ -307,6 +307,64 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Starting the click in time with the player: grid-locked start, lead
+  scheduling, and measured sync calibration (this build)**: the request
+  was that the auto-started click land exactly in time with playing --
+  "the most important thing about the app." Read the code for every
+  source of misalignment rather than guessing:
+  (1) The click's phase came from ONE detected hit (its jitter/bias went
+  1:1 into the click's phase). (2) Its tempo came from the FIRST reading
+  after a tempo appeared -- the least precise one -- frozen for the whole
+  countdown (`lockStartBpm`). (3) The trigger fired only once the target
+  instant had already passed, so the engine's first-click catch-up played
+  the first click "now" -- late by however long the update polling lagged
+  -- and the first click is the one a player judges sync by.
+  (4) Suspected, unverified: `audioTimeAtSample0 = event.playbackTime`.
+  For a ScriptProcessorNode, playbackTime is when the chunk's OUTPUT will
+  play, and the node adds a buffer of latency (4096 frames ~ 93ms at
+  44.1kHz), so if sample 0 was really captured ~1-2 buffers earlier,
+  every onset timestamp is a constant ~90-190ms late and the click sits
+  that far behind the sticks regardless of any grid math. Not verified on
+  Safari/iOS from here; the calibration below measures it directly.
+  Changes: `tempoRefine.ts` now also returns the fitted grid (period +
+  reference beat), surfaced as `EngineState.beatGrid` in perf-seconds;
+  `beatGrid.ts` (new, pure) places a start on that grid -- count-in mode
+  = N bars after the beat nearest the first hit, "Once stable" = next
+  downbeat at least `START_LEAD_SEC` (0.3s) away -- and the click plays at
+  the grid's own best-available tempo. In count-in mode the grid may only
+  *refine* the original start (accepted only within half a beat of the
+  original computation), never change which beat the count-in lands on.
+  `updateBarCountdown`/`checkStabilityTrigger` gained an optional lead
+  (defaults preserve old behaviour) so the trigger fires 0.3s early and the
+  click is queued into the audio graph in advance instead of caught up.
+  `syncCalibration.ts` (new, pure, 14 tests) + "Calibrate sync" in
+  Settings -> Sounds: plays 10 clicks through the speaker while listening
+  with the mic and measures how late the same detector hears them --
+  which is exactly the constant that a click must be played early by to
+  line up with a stick detected at the same moment (derivation in the
+  module header). It captures mic/timestamp/detector/output/Bluetooth
+  delay all at once without needing to know each. Criteria were chosen
+  for a very low false-accept rate (a failed run changes nothing; a wrong
+  number silently shifts every click): 10 clicks, >=70% matched, +/-15ms
+  inlier window, <=8ms spread = 0.000% false accepts over 20,000 random
+  trials (an earlier 8-click/5-of-8/+/-25ms setting accepted garbage 1%
+  of the time, found when a test tripped on it). Timing offset range
+  widened from +/-100ms to +/-500ms (Bluetooth alone is commonly
+  100-300ms).
+  **Measured, synthetically** (simulated 2-bar 4/4 stick count-in,
+  +/-8-15ms jitter, current shipped behaviour vs grid-locked; assumes
+  trigger polling lag uniform 0-100ms): first-click error ~55-62ms ->
+  ~2.5-5.5ms. 60 beats later: ~52-111ms -> ~33-70ms -- a modest gain,
+  because that residual is an information limit (8 count-in hits pin the
+  tempo to ~0.15%, ~35ms of drift per 30s; expected to improve roughly as
+  N^1.5 with more hits, so a longer count-in or "Once stable" helps).
+  **Not verified:** the calibration orchestration in the hook (plays clicks
+  while listening) and the whole start path are untested on a real
+  device -- like the rest of the audio layer they can't be unit tested
+  here. Constants not modelled: the acoustic path, the human's own
+  timing drift, and AudioContext.currentTime quantization (each
+  `start()` re-samples the perf<->audio clock offset, which limits
+  calibration precision to a few ms).
 - **Steadier BPM detection: beat-grid regression, longer window, deadband
   (this build)**: the readout was wandering. Researched how Live BPM,
   BPM Detector, liveBPM and Tempi describe their approach (store listings

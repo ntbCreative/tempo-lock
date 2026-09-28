@@ -14,6 +14,19 @@ export interface TempoCandidate {
 }
 
 /**
+ * A fitted beat grid: beat k lands at `referenceBeatSec + k * periodSec`.
+ * Time base is whatever the onsets it was fitted from used.
+ */
+export interface BeatGrid {
+  periodSec: number;
+  referenceBeatSec: number;
+  /** How many onsets landed on the grid -- how much evidence backs it. */
+  beats: number;
+  /** RMS of onset residuals against the grid, in seconds -- how tightly the playing sits on it. */
+  rmsSec: number;
+}
+
+/**
  * The raw output of the tempo estimator for one analysis window. This is
  * intentionally kept separate from the smoothed/locked value shown to the
  * user (see ContinuityState) so the two concerns never get tangled.
@@ -29,4 +42,6 @@ export interface TempoEstimate {
   coherent: boolean;
   /** All candidates considered, strongest first, for diagnostics. */
   candidates: TempoCandidate[];
+  /** The fitted beat grid (phase + period) when a trustworthy fit exists, else null/absent. */
+  grid?: BeatGrid | null;
 }

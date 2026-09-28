@@ -343,3 +343,49 @@ describe('metronomeSchedule: checkStabilityTrigger', () => {
     expect(Number.isFinite(result.metronomeStartTimeSec)).toBe(true);
   });
 });
+
+describe('metronomeSchedule: start lead time', () => {
+  const cfg = { barsRequired: 2 as const, beatsPerBar: 4 };
+  // 120 BPM, 4/4, 2 bars = 4.0s. Lock starts at t=10 -> start instant is t=14.
+
+  it('by default fires only once the start instant has been reached (unchanged behaviour)', () => {
+    let r = updateBarCountdown(createBarCountdownState(), 120, 10, cfg, 10);
+    r = updateBarCountdown(r.state, 120, 13.9, cfg, 10);
+    expect(r.shouldStartMetronome).toBe(false);
+    r = updateBarCountdown(r.state, 120, 14.0, cfg, 10);
+    expect(r.shouldStartMetronome).toBe(true);
+  });
+
+  it('with a lead, fires early but still targets the exact start instant', () => {
+    const lead = { ...cfg, startLeadSec: 0.3 };
+    let r = updateBarCountdown(createBarCountdownState(), 120, 10, lead, 10);
+    r = updateBarCountdown(r.state, 120, 13.65, lead, 10);
+    expect(r.shouldStartMetronome).toBe(false); // 0.35s early: not yet
+    r = updateBarCountdown(r.state, 120, 13.71, lead, 10); // just past the 13.7 boundary (avoids a float-equality edge)
+    expect(r.shouldStartMetronome).toBe(true);
+    expect(r.metronomeStartTimeSec).toBeCloseTo(14.0, 9);
+    expect(r.metronomeStartTimeSec!).toBeGreaterThan(13.71); // genuinely in the future
+  });
+
+  it('still fires only once with a lead', () => {
+    const lead = { ...cfg, startLeadSec: 0.3 };
+    let r = updateBarCountdown(createBarCountdownState(), 120, 10, lead, 10);
+    r = updateBarCountdown(r.state, 120, 13.8, lead, 10);
+    expect(r.shouldStartMetronome).toBe(true);
+    r = updateBarCountdown(r.state, 120, 13.9, lead, 10);
+    expect(r.shouldStartMetronome).toBe(false);
+  });
+
+  it('checkStabilityTrigger with a lead never targets an instant closer than the lead', () => {
+    // 120 BPM 4/4 -> 2s bars, anchor at 0. At now=5.9 the next boundary is 6.0
+    // (only 0.1s away); with a 0.3s lead it must skip to 8.0.
+    const legacy = checkStabilityTrigger(120, 20, 15, 5.9, 0, 4);
+    expect(legacy.metronomeStartTimeSec).toBeCloseTo(6.0, 9);
+    const led = checkStabilityTrigger(120, 20, 15, 5.9, 0, 4, 0.3);
+    expect(led.metronomeStartTimeSec).toBeCloseTo(8.0, 9);
+    for (let now = 3; now < 12; now += 0.037) {
+      const r = checkStabilityTrigger(120, 20, 15, now, 0, 4, 0.3);
+      expect(r.metronomeStartTimeSec!).toBeGreaterThanOrEqual(now + 0.3 - 1e-9);
+    }
+  });
+});

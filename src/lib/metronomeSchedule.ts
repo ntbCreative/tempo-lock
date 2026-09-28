@@ -37,12 +37,22 @@ export interface BarCountdownConfig {
   beatsPerBar: number;
   /** Relative BPM drift from the countdown's starting tempo treated as a genuine tempo change (resets and restarts the countdown) rather than noise. */
   driftTolerance: number;
+  /**
+   * Fire the trigger this many seconds *before* the start instant, so the
+   * click can be scheduled into the audio graph ahead of time. Without it
+   * the trigger only fires on the first update after the instant has
+   * already passed, which forces the very first click to be played late
+   * ("catch-up") -- and the first click is the one a player judges sync by.
+   * 0 (the default) keeps the original fire-at-the-instant behaviour.
+   */
+  startLeadSec: number;
 }
 
 export const DEFAULT_BAR_COUNTDOWN_CONFIG: BarCountdownConfig = {
   barsRequired: 0,
   beatsPerBar: 4,
   driftTolerance: 0.08,
+  startLeadSec: 0,
 };
 
 export interface BarCountdownState {
@@ -122,7 +132,7 @@ export function updateBarCountdown(
   const requiredDurationSec = beatIntervalSec * cfg.beatsPerBar * cfg.barsRequired;
   const elapsed = nowSec - state.lockStartTimeSec;
 
-  if (elapsed >= requiredDurationSec) {
+  if (elapsed >= requiredDurationSec - cfg.startLeadSec) {
     const startTimeSec = state.lockStartTimeSec + requiredDurationSec;
     return {
       state: { ...state, triggered: true },
@@ -224,7 +234,8 @@ export function checkStabilityTrigger(
   requiredStableTicks: number,
   nowSec: number,
   anchorTimeSec: number | null,
-  beatsPerBar: number
+  beatsPerBar: number,
+  minLeadSec = 0
 ): StabilityTriggerResult {
   if (displayedBpm === null || displayedBpm <= 0 || stableTicks < requiredStableTicks) {
     return { shouldStartMetronome: false, metronomeBpm: null, metronomeStartTimeSec: null };
@@ -232,7 +243,7 @@ export function checkStabilityTrigger(
   const anchor = anchorTimeSec ?? nowSec;
   const safeBeatsPerBar = beatsPerBar > 0 ? beatsPerBar : 1;
   const barIntervalSec = (60 / displayedBpm) * safeBeatsPerBar;
-  const elapsedBars = Math.max(1, Math.ceil((nowSec - anchor) / barIntervalSec));
+  const elapsedBars = Math.max(1, Math.ceil((nowSec + minLeadSec - anchor) / barIntervalSec));
   const startTimeSec = anchor + elapsedBars * barIntervalSec;
   return { shouldStartMetronome: true, metronomeBpm: displayedBpm, metronomeStartTimeSec: startTimeSec };
 }

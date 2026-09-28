@@ -239,5 +239,8 @@ export function estimateTempo(
     onsetCount: onsets.length,
     coherent,
     candidates,
+    grid: refined
+      ? { periodSec: refined.periodSec, referenceBeatSec: refined.referenceBeatSec, beats: refined.beats, rmsSec: refined.rmsSec }
+      : null,
   };
 }

@@ -7,7 +7,7 @@ import {
 } from '../lib/onsetDetection';
 import { estimateTempo, type TempoEstimatorConfig } from '../lib/tempoEstimator';
 import { buildImpulseEnvelope, estimateTempoByAutocorrelation } from '../lib/autocorrelation';
-import type { TempoCandidate } from '../lib/types';
+import type { BeatGrid, TempoCandidate } from '../lib/types';
 import {
   createContinuityState,
   updateContinuity,
@@ -55,6 +55,14 @@ export interface EngineState {
   frozen: boolean;
   /** The time (perf seconds) of the very first onset detected this session, or null if none yet -- see firstOnsetAbsSec's doc comment. */
   firstOnsetTimeSec: number | null;
+  /**
+   * The fitted beat grid from the latest analysis tick, in the same time
+   * base as firstOnsetTimeSec (perf seconds): beat k lands at
+   * referenceBeatSec + k * periodSec. Null when no trustworthy fit exists
+   * yet. This is what lets a click start be placed onto the player's actual
+   * grid rather than offset from one detected hit.
+   */
+  beatGrid: BeatGrid | null;
   errorMessage?: string;
 }
 
@@ -201,6 +209,7 @@ export class LiveTempoEngine {
       candidates: [],
       frozen: false,
       firstOnsetTimeSec: null,
+      beatGrid: null,
     };
   }
 
@@ -224,6 +233,20 @@ export class LiveTempoEngine {
   freeze(): void {
     this.frozen = true;
     this.emit({ frozen: true });
+  }
+
+  /** Current lifecycle status, for callers (like sync calibration) that need to check it synchronously rather than through the update callback. */
+  getStatus(): EngineStatus {
+    return this.engineState.status;
+  }
+
+  /**
+   * A copy of the onset times currently held (perf seconds, trailing window).
+   * Used by sync calibration to compare when the detector heard test clicks
+   * against when they were scheduled.
+   */
+  getOnsetTimes(): number[] {
+    return [...this.onsetTimesSec];
   }
 
   private emit(partial: Partial<EngineState>): void {
@@ -355,6 +378,7 @@ export class LiveTempoEngine {
       candidates: [],
       frozen: false,
       firstOnsetTimeSec: null,
+      beatGrid: null,
     };
   }
 
@@ -556,6 +580,11 @@ export class LiveTempoEngine {
       onsetCount: this.onsetTimesSec.length,
       candidates: rawEstimate.candidates.slice(0, 3),
       firstOnsetTimeSec: this.firstOnsetAbsSec,
+      // The estimator worked in onset times relative to the window's first
+      // onset; shift the grid's reference beat back into absolute perf time.
+      beatGrid: rawEstimate.grid
+        ? { ...rawEstimate.grid, referenceBeatSec: rawEstimate.grid.referenceBeatSec + this.onsetTimesSec[0] }
+        : null,
     });
   }
 }

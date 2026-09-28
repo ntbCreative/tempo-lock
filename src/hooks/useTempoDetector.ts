@@ -15,6 +15,9 @@ import {
   type BarCount,
   type BarCountdownState,
 } from '../lib/metronomeSchedule';
+import { countInStartOnGrid, gridBpm, nextDownbeatOnGrid } from '../lib/beatGrid';
+import { measureLoopbackLatency } from '../lib/syncCalibration';
+import type { BeatGrid } from '../lib/types';
 import { parseCustomAccentBeats, type AccentMode, type SoundKit, type Subdivision } from '../lib/clickPattern';
 import type { TempoRampConfig } from '../lib/tempoRamp';
 import type { FeelMultiplier } from '../lib/feel';
@@ -29,6 +32,22 @@ const POSITION_POLL_MS = 100;
 const SETTINGS_STORAGE_KEY = 'tempo-lock:settings';
 /** Rolling window (seconds) kept for the live tempo graph. */
 const GRAPH_WINDOW_SEC = 60;
+
+/** Range of the manual click-timing offset (ms). Wide enough for Bluetooth output, which alone is commonly 100-300ms. */
+export const MAX_TIMING_OFFSET_MS = 500;
+
+/** Sync calibration: a 10-click train at 75 BPM (0.8s apart, so detection windows can't overlap). */
+const CAL_CLICKS = 10;
+const CAL_BPM = 75;
+/** Seconds before the first click: the mic engine spends its first 0.6s calibrating the noise floor, and clicks played during that would be missed. */
+const CAL_LEADIN_SEC = 1.1;
+/** Seconds to keep listening after the last click so its detection can arrive. */
+const CAL_TAIL_SEC = 0.8;
+
+export interface SyncCalibrationState {
+  status: 'idle' | 'running' | 'done' | 'failed';
+  message: string;
+}
 const THEME_STORAGE_KEY = 'tempo-lock:theme';
 const COLOR_SCHEME_STORAGE_KEY = 'tempo-lock:color-scheme';
 const SECTION_ORDER_STORAGE_KEY = 'tempo-lock:section-order';
@@ -166,6 +185,7 @@ export function useTempoDetector() {
     candidates: [],
     frozen: false,
     firstOnsetTimeSec: null,
+    beatGrid: null,
   });
   const [tapState, setTapState] = useState<TapTempoState>(createTapTempoState());
   const [metronomeActive, setMetronomeActive] = useState(false);
@@ -177,6 +197,11 @@ export function useTempoDetector() {
   // not raw jitter.
   const [bpmHistory, setBpmHistory] = useState<{ t: number; bpm: number }[]>([]);
   const lastGraphSampleRef = useRef(0);
+  const [calibration, setCalibration] = useState<SyncCalibrationState>({ status: 'idle', message: '' });
+  // True while a sync calibration is playing clicks into the mic. None of
+  // the normal listening logic (auto-start, session resets) should react to
+  // that deliberate test signal.
+  const calibratingRef = useRef(false);
   const [metronomePosition, setMetronomePosition] = useState<MetronomePosition | null>(null);
   const [feel, setFeelState] = useState<FeelMultiplier>(1);
   const [manualBpm, setManualBpmState] = useState(120);
@@ -208,6 +233,18 @@ export function useTempoDetector() {
   // fresh session.
   const stabilityTriggeredRef = useRef(false);
   const REQUIRED_STABLE_TICKS = 15; // ~2.25s at the ~150ms analysis interval
+  // How far ahead of the click's target instant the auto-start trigger fires.
+  // Detection updates arrive every ~90-150ms, so a trigger that waited for
+  // the instant itself would land on average ~half an update late, and the
+  // engine would have to play the first click "now" instead of on time.
+  // Firing this early lets the click be queued into the audio graph in
+  // advance and land sample-accurately.
+  const START_LEAD_SEC = 0.3;
+  // The most recent fitted beat grid, kept briefly so a single tick where the
+  // fit is momentarily unavailable doesn't drop the click back to the
+  // less-precise single-hit anchoring at exactly the wrong moment.
+  const GRID_MAX_AGE_SEC = 2;
+  const lastGridRef = useRef<{ grid: BeatGrid; atSec: number } | null>(null);
   // Set right before a successful auto-start trigger calls engine.stop() to
   // actually release the mic. That stop() synchronously re-invokes this
   // same onUpdate handler (status -> 'idle') before triggerMetronomeStart
@@ -301,6 +338,7 @@ export function useTempoDetector() {
       ...settings,
       onUpdate: (state) => {
         setEngineState(state);
+        if (calibratingRef.current) return;
 
         if (state.status !== 'listening') {
           if (!autoStoppedListeningRef.current && (metronomeEngineRef.current?.isRunning() || countInEngineRef.current?.isRunning())) {
@@ -314,6 +352,7 @@ export function useTempoDetector() {
           stabilityTriggeredRef.current = false;
           autoStartSuppressedRef.current = false; // a fresh session can always auto-start again
           autoStoppedListeningRef.current = false;
+          lastGridRef.current = null;
           return;
         }
 
@@ -338,6 +377,14 @@ export function useTempoDetector() {
         }
 
         const cfg = settingsRef.current;
+
+        const nowSecForGrid = performance.now() / 1000;
+        if (state.beatGrid) lastGridRef.current = { grid: state.beatGrid, atSec: nowSecForGrid };
+        const freshGrid = (): BeatGrid | null => {
+          const g = lastGridRef.current;
+          return g && nowSecForGrid - g.atSec <= GRID_MAX_AGE_SEC ? g.grid : null;
+        };
+        const clampClickBpm = (bpm: number) => Math.min(cfg.maxBpm, Math.max(cfg.minBpm, bpm));
 
         const triggerMetronomeStart = (bpm: number, startTimeSec: number) => {
           countInEngineRef.current?.stop();
@@ -385,17 +432,28 @@ export function useTempoDetector() {
               state.continuity.displayedBpm,
               state.continuity.stableTicks,
               REQUIRED_STABLE_TICKS,
-              performance.now() / 1000,
+              nowSecForGrid,
               state.firstOnsetTimeSec,
-              cfg.beatsPerBar
+              cfg.beatsPerBar,
+              START_LEAD_SEC
             );
             if (
               stabilityResult.shouldStartMetronome &&
               stabilityResult.metronomeBpm !== null &&
               stabilityResult.metronomeStartTimeSec !== null
             ) {
+              let clickBpm = stabilityResult.metronomeBpm;
+              let startTimeSec = stabilityResult.metronomeStartTimeSec;
+              // Prefer the player's own fitted grid: the next downbeat on it,
+              // and its (unsmoothed, best-available) tempo, instead of an
+              // offset from one hit at the possibly-lagging displayed BPM.
+              const grid = freshGrid();
+              if (grid && state.firstOnsetTimeSec !== null) {
+                startTimeSec = nextDownbeatOnGrid(grid, state.firstOnsetTimeSec, nowSecForGrid, cfg.beatsPerBar, START_LEAD_SEC);
+                clickBpm = clampClickBpm(gridBpm(grid));
+              }
               stabilityTriggeredRef.current = true;
-              triggerMetronomeStart(stabilityResult.metronomeBpm, stabilityResult.metronomeStartTimeSec);
+              triggerMetronomeStart(clickBpm, startTimeSec);
             }
           }
           return;
@@ -419,7 +477,7 @@ export function useTempoDetector() {
           previousState,
           bpmForCountdown,
           performance.now() / 1000,
-          { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar },
+          { barsRequired: cfg.metronomeBars, beatsPerBar: cfg.beatsPerBar, startLeadSec: START_LEAD_SEC },
           state.firstOnsetTimeSec
         );
         barCountdownRef.current = result.state;
@@ -448,7 +506,24 @@ export function useTempoDetector() {
         }
 
         if (result.shouldStartMetronome && result.metronomeBpm !== null && result.metronomeStartTimeSec !== null) {
-          triggerMetronomeStart(result.metronomeBpm, result.metronomeStartTimeSec);
+          let clickBpm = result.metronomeBpm;
+          let startTimeSec = result.metronomeStartTimeSec;
+          // Refine (never redefine) the start using the fitted grid: same
+          // count-in -- N bars after the first hit -- but timed from the
+          // grid's phase and period instead of one hit plus the frozen
+          // first-reading tempo. Only accepted if it agrees with the original
+          // computation on WHICH beat this is (within half a beat); a
+          // disagreement means something odd (e.g. the countdown restarted
+          // mid-session), and the original answer is kept.
+          const grid = freshGrid();
+          if (grid && state.firstOnsetTimeSec !== null) {
+            const gridStart = countInStartOnGrid(grid, state.firstOnsetTimeSec, cfg.metronomeBars, cfg.beatsPerBar);
+            if (Math.abs(gridStart - startTimeSec) <= 0.5 * grid.periodSec) {
+              startTimeSec = gridStart;
+              clickBpm = clampClickBpm(gridBpm(grid));
+            }
+          }
+          triggerMetronomeStart(clickBpm, startTimeSec);
         }
 
         // While a click track is already playing and the mic is still
@@ -552,6 +627,108 @@ export function useTempoDetector() {
     setSettings((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  /**
+   * Measures the total fixed delay between when a click is scheduled and when
+   * this device's own detector hears it -- mic latency, how the input is
+   * timestamped, detector bias, and output/Bluetooth latency all at once --
+   * and folds it into the click-timing offset. Plays 10 clicks through the
+   * speaker while listening (see syncCalibration.ts for why that lag is
+   * exactly the correction needed). Takes ~10 seconds, changes the setting
+   * only on a trustworthy measurement, and otherwise says why it failed.
+   */
+  const calibrateSync = useCallback(async () => {
+    if (calibratingRef.current) return;
+    const cfg = settingsRef.current;
+    if (!isMicrophoneSupported()) {
+      setCalibration({ status: 'failed', message: "This browser can't use the microphone, so sync can't be measured." });
+      return;
+    }
+    if (cfg.mode === 'recording') {
+      setCalibration({
+        status: 'failed',
+        message: 'Switch Detection mode to Live first -- Recording mode filters out the sharp click this test relies on.',
+      });
+      return;
+    }
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    calibratingRef.current = true;
+    setCalibration({ status: 'running', message: "Measuring... keep the room quiet and don't touch the phone while 10 clicks play." });
+    const testClick = new MetronomeEngine();
+    try {
+      // Take over from anything already running: a click already playing would
+      // be indistinguishable from the test clicks, and a fresh listening
+      // session gets a clean noise-floor calibration.
+      metronomeEngineRef.current?.stop();
+      countInEngineRef.current?.stop();
+      setMetronomeActive(false);
+      setMetronomeBpm(null);
+      stopPositionPoll();
+      engine.stop();
+      await engine.start(null);
+      if (engine.getStatus() !== 'listening') {
+        setCalibration({
+          status: 'failed',
+          message: 'Microphone access is needed to measure sync. Allow it in your browser settings and try again.',
+        });
+        return;
+      }
+
+      const spacingSec = 60 / CAL_BPM;
+      const startAtSec = performance.now() / 1000 + CAL_LEADIN_SEC;
+      const scheduled = Array.from({ length: CAL_CLICKS }, (_, k) => startAtSec + k * spacingSec);
+      testClick.start(CAL_BPM, startAtSec, {
+        beatsPerBar: 1,
+        accentMode: 'all',
+        soundKit: 'woodblock',
+        subdivision: 'none',
+        volumeScale: 1,
+        subdivisionVolumeScale: 1,
+        timingOffsetMs: cfg.clickTimingOffsetMs,
+        totalBars: CAL_CLICKS,
+      });
+      await new Promise((resolve) => setTimeout(resolve, (CAL_LEADIN_SEC + CAL_CLICKS * spacingSec + CAL_TAIL_SEC) * 1000));
+
+      const result = measureLoopbackLatency(scheduled, engine.getOnsetTimes());
+      if (result.ok) {
+        // The clicks were played with the current offset already applied, so
+        // the measured lag is what's still missing on top of it.
+        const measuredMs = Math.round(result.latencySec * 1000);
+        const unclamped = cfg.clickTimingOffsetMs + measuredMs;
+        const next = Math.max(-MAX_TIMING_OFFSET_MS, Math.min(MAX_TIMING_OFFSET_MS, unclamped));
+        updateSettings({ clickTimingOffsetMs: next });
+        setCalibration({
+          status: 'done',
+          message:
+            `Measured ${measuredMs} ms of remaining delay (${result.matched} of ${result.total} clicks heard). ` +
+            `Click timing is now ${next > 0 ? '+' : ''}${next} ms.` +
+            (next !== unclamped ? ' (That hit the limit -- something unusual is adding a very large delay.)' : ''),
+        });
+      } else if (result.reason === 'too-few') {
+        setCalibration({
+          status: 'failed',
+          message:
+            `Only heard ${result.matched} of ${result.total} clicks. Use the phone's own speaker (headphones can't be ` +
+            'picked up by the mic), turn the volume up, keep the room quiet, and try again. Nothing was changed.',
+        });
+      } else {
+        setCalibration({
+          status: 'failed',
+          message:
+            'The clicks were heard, but at inconsistent times -- likely room noise or an echo. Try again somewhere ' +
+            'quieter. Nothing was changed.',
+        });
+      }
+    } catch {
+      setCalibration({ status: 'failed', message: 'Something went wrong while measuring. Nothing was changed -- try again.' });
+    } finally {
+      testClick.stop();
+      engine.stop();
+      calibratingRef.current = false;
+    }
+  }, [updateSettings, stopPositionPoll]);
+
   const setTheme = useCallback((next: ThemeId) => {
     setThemeState(next);
   }, []);
@@ -615,7 +792,7 @@ export function useTempoDetector() {
       if (!metronomeActive) return;
       metronomeEngineRef.current?.nudgePhase(deltaMs / 1000);
       updateSettings({
-        clickTimingOffsetMs: Math.max(-100, Math.min(100, settingsRef.current.clickTimingOffsetMs + deltaMs)),
+        clickTimingOffsetMs: Math.max(-MAX_TIMING_OFFSET_MS, Math.min(MAX_TIMING_OFFSET_MS, settingsRef.current.clickTimingOffsetMs + deltaMs)),
       });
     },
     [metronomeActive, updateSettings]
@@ -740,6 +917,8 @@ export function useTempoDetector() {
     bpmHistory,
     start,
     resetListening,
+    calibrateSync,
+    calibration,
     stop,
     tapState,
     tap,

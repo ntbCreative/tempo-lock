@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import type { DetectorSettings, SettingsSectionId } from './hooks/useTempoDetector';
+import type { DetectorSettings, SettingsSectionId, SyncCalibrationState } from './hooks/useTempoDetector';
+import { MAX_TIMING_OFFSET_MS } from './hooks/useTempoDetector';
 import type { SoundKit } from './lib/clickPattern';
 import { SOUND_KITS } from './lib/clickPattern';
 import { THEMES, type ThemeId, type ColorScheme } from './lib/themes';
@@ -29,6 +30,8 @@ const SECTION_TITLES: Record<SettingsSectionId, string> = {
 };
 
 interface SettingsProps {
+  calibrateSync: () => void;
+  calibration: SyncCalibrationState;
   settings: DetectorSettings;
   updateSettings: (partial: Partial<DetectorSettings>) => void;
   theme: ThemeId;
@@ -203,7 +206,7 @@ function ClickTrackSection({ settings, updateSettings }: SettingsProps) {
   );
 }
 
-function SoundsSection({ settings, updateSettings }: SettingsProps) {
+function SoundsSection({ settings, updateSettings, calibrateSync, calibration }: SettingsProps) {
   return (
     <div className="settings-section__body">
       <div className="control">
@@ -255,8 +258,8 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
         <input
           id="timing-offset"
           type="range"
-          min={-100}
-          max={100}
+          min={-MAX_TIMING_OFFSET_MS}
+          max={MAX_TIMING_OFFSET_MS}
           step={5}
           value={settings.clickTimingOffsetMs}
           onChange={(e) => updateSettings({ clickTimingOffsetMs: Number(e.target.value) })}
@@ -267,6 +270,26 @@ function SoundsSection({ settings, updateSettings }: SettingsProps) {
           browser can't see at all. If the click sounds slightly late (displaced) against what you're playing,
           raise this. If it sounds early, lower it.
         </p>
+        <button
+          type="button"
+          className="pill-button"
+          onClick={calibrateSync}
+          disabled={calibration.status === 'running'}
+          aria-describedby="calibrate-sync-note"
+        >
+          {calibration.status === 'running' ? 'Measuring…' : 'Calibrate sync (measure it)'}
+        </button>
+        <p id="calibrate-sync-note" className="settings-note">
+          Rather than guessing, this measures the delay on your actual setup: it plays 10 clicks through the phone's
+          speaker while listening with the mic, and sets the timing from how late the app hears them. It captures
+          everything at once -- mic delay, Bluetooth, output lag. Takes about 10 seconds. Use the phone's speaker (not
+          headphones), turn the volume up, stay quiet, and set Detection mode to Live.
+        </p>
+        {calibration.message && (
+          <p className="settings-note" role="status" aria-live="polite">
+            {calibration.message}
+          </p>
+        )}
       </div>
 
       <div className="control">

@@ -119,6 +119,8 @@ function App() {
     bpmHistory,
     start,
     resetListening,
+    calibrateSync,
+    calibration,
     stop,
     tapState,
     tap,
@@ -763,6 +765,8 @@ function App() {
           setTheme={setTheme}
           colorScheme={colorScheme}
           setColorScheme={setColorScheme}
+          calibrateSync={calibrateSync}
+          calibration={calibration}
           sectionOrder={sectionOrder}
           reorderSections={reorderSections}
           onClose={() => setSettingsOpen(false)}

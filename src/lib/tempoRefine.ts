@@ -78,6 +78,16 @@ export const DEFAULT_REFINE_CONFIG: RefineConfig = {
 
 export interface RefinedTempo {
   bpm: number;
+  /** Fitted beat period in seconds (60 / bpm), unrounded. */
+  periodSec: number;
+  /**
+   * The fitted time of one real beat, in the same time base as the onsets
+   * passed in. Together with periodSec this fully describes the beat grid:
+   * beat k lands at referenceBeatSec + k * periodSec, for any integer k
+   * (including future beats -- which is what lets a click be scheduled onto
+   * the player's grid rather than at an arbitrary offset from one hit).
+   */
+  referenceBeatSec: number;
   /** How many onsets landed on the fitted grid. */
   beats: number;
   /** Beats between the first and last accepted onset. */
@@ -192,5 +202,12 @@ export function refineTempoByRegression(
   if (best.rmsSec > cfg.maxRmsFraction * best.period) return null;
   if (best.beats / (best.spanBeats + 1) < cfg.minGridDensity) return null;
 
-  return { bpm: 60 / best.period, beats: best.beats, spanBeats: best.spanBeats, rmsSec: best.rmsSec };
+  return {
+    bpm: 60 / best.period,
+    periodSec: best.period,
+    referenceBeatSec: best.intercept,
+    beats: best.beats,
+    spanBeats: best.spanBeats,
+    rmsSec: best.rmsSec,
+  };
 }
