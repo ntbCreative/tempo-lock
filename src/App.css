@@ -795,6 +795,11 @@ body {
   margin: 0;
 }
 
+.build-stamp {
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
 @media (min-width: 640px) {
   .bpm-readout__value {
     font-size: 140px;

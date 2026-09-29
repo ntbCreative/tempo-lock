@@ -283,7 +283,9 @@ function SoundsSection({ settings, updateSettings, calibrateSync, calibration }:
           Rather than guessing, this measures the delay on your actual setup: it plays 10 clicks through the phone's
           speaker while listening with the mic, and sets the timing from how late the app hears them. It captures
           everything at once -- mic delay, Bluetooth, output lag. Takes about 10 seconds. Use the phone's speaker (not
-          headphones), turn the volume up, stay quiet, and set Detection mode to Live.
+          headphones), turn the volume up, and stay quiet. Works in either Detection mode -- it plays a test tone
+          matched to whichever one is active (a sharp click for Live, a low kick tone for Recording, so the filter
+          that isolates the kick/bass pulse doesn't remove it).
         </p>
         {calibration.message && (
           <p className="settings-note" role="status" aria-live="polite">

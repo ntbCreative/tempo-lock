@@ -666,13 +666,6 @@ export function useTempoDetector() {
       setCalibration({ status: 'failed', message: "This browser can't use the microphone, so sync can't be measured." });
       return;
     }
-    if (cfg.mode === 'recording') {
-      setCalibration({
-        status: 'failed',
-        message: 'Switch Detection mode to Live first -- Recording mode filters out the sharp click this test relies on.',
-      });
-      return;
-    }
     const engine = engineRef.current;
     if (!engine) return;
 
@@ -701,10 +694,15 @@ export function useTempoDetector() {
       const spacingSec = 60 / CAL_BPM;
       const startAtSec = performance.now() / 1000 + CAL_LEADIN_SEC;
       const scheduled = Array.from({ length: CAL_CLICKS }, (_, k) => startAtSec + k * spacingSec);
+      // Recording mode low-passes the mic input at 150Hz to isolate a
+      // kick/bass pulse from a full mix -- a woodblock's energy sits well
+      // above that and would be filtered away, so the test signal has to
+      // match whichever mode is actually listening. The kick kit's tone
+      // sweeps 140Hz -> 42Hz, squarely inside what the filter passes.
       testClick.start(CAL_BPM, startAtSec, {
         beatsPerBar: 1,
         accentMode: 'all',
-        soundKit: 'woodblock',
+        soundKit: cfg.mode === 'recording' ? 'kick' : 'woodblock',
         subdivision: 'none',
         volumeScale: 1,
         subdivisionVolumeScale: 1,

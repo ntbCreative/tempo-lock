@@ -125,7 +125,7 @@ current tempo, missing estimates, out-of-range values, state reset, tempo
 ranges (slow/medium/fast), fast tempos not collapsing to half-time,
 tie-breaking, noisy/incomplete onsets, dropouts, drift, and abrupt changes.
 
-Run `npm run test` for the full suite (284 tests as of this build).
+Run `npm run test` for the full suite (288 tests as of this build).
 
 ## Known real-world limitations
 
@@ -307,6 +307,44 @@ real kit has not been measured. In particular:
   and lift off the page, and pressing it now visibly pushes it in (an
   inset shadow, plus a real downward shift) instead of just a subtle
   scale-down. Purely visual — no functional changes.
+- **Sync calibration now works in Recording mode too (this build)**:
+  it previously refused to run unless Detection mode was set to Live,
+  with the reason "Recording mode filters out the sharp click this test
+  relies on" -- true, but a real gap: syncing to an outside pulse (a
+  song, a backing track through speakers) is exactly what Recording mode
+  is for, and it had no way to calibrate. Checked the actual filter (a
+  150Hz low-pass) and the kick kit's synthesis (sweeps 140Hz -> 42Hz,
+  squarely inside what that filter passes) and switched the test
+  signal's sound kit by mode -- woodblock for Live, kick for Recording --
+  instead of blocking Recording outright. The restriction is removed;
+  the explanatory text in Settings now describes both cases. Calibration
+  still writes one shared timing offset for both modes; if the two turn
+  out to need different corrections in practice, that's the next thing
+  to build (per-mode offsets), not assumed here.
+- **Fixed a crash I introduced with the build stamp (this build)**: the
+  previous build injected the footer's build stamp through a bundler
+  `define` in `vite.config.ts` -- a file OUTSIDE `src/`. Updates here are
+  delivered by replacing only `src/` and the README, so with that config
+  change missing the app referenced an undefined global and threw
+  `ReferenceError: __BUILD_ID__ is not defined` on load (reproduced by
+  running the App render tests under the original config: all 4 failed).
+  The stamp is now a plain constant in `src/buildInfo.ts`, and
+  `vite.config.ts` is back to its original content, so this build needs
+  changes ONLY in `src/` and the README. Rule going forward: nothing
+  outside `src/` may be required. `buildInfo.ts` is rewritten with the UTC
+  time at packaging; the footer shows "Build <time>".
+- **Sync button moved next to Stop Click; build stamp added (this build)**:
+  the Sync button was reported missing. It was in the build, but placed in
+  the lower "Click track settings" card (under the -1/+1 BPM row) and only
+  shown while a click is playing -- nowhere near where anyone would look.
+  Moved to the top "Tap tempo & click" card, full width directly under the
+  Tap tempo | Stop Click row. Verified by rendering the real App in a test
+  (`App.sync.test.tsx`, 4 tests): present while the click plays, in the same
+  card as Stop Click, absent otherwise, accessible name starts with "Sync".
+  Separately, stale cached builds have repeatedly been mistaken for missing
+  changes in this project, so the footer now shows "Build <UTC timestamp>"
+  (injected at build time via vite `define`) -- if that time doesn't match
+  the latest deploy, the device is serving an old copy.
 - **"Sync" button (this build)**: while the click is playing, a
   button in the click controls re-aligns it to the player: tap it exactly
   on your downbeat and the click's grid slides so one of its own downbeats

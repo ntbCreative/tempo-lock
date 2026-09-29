@@ -5,6 +5,7 @@ import { ACCENT_MODE_OPTIONS, SUBDIVISION_OPTIONS, type AccentMode, type Subdivi
 import { BAR_COUNT_OPTIONS, type BarCount } from './lib/metronomeSchedule';
 import type { MainSectionId } from './hooks/useTempoDetector';
 import Settings from './Settings';
+import { BUILD_LABEL } from './buildInfo';
 import './App.css';
 
 const MAIN_SECTION_TITLES: Record<MainSectionId, string> = {
@@ -475,6 +476,7 @@ function App() {
               </div>
             ),
             tap: (
+              <>
               <div className="listen-row">
                 <button
                   type="button"
@@ -492,6 +494,29 @@ function App() {
                   {metronomeActive ? 'Stop Click' : 'Play Click'}
                 </button>
               </div>
+              {metronomeActive && (
+                <>
+                  <button
+                    type="button"
+                    className="big-button big-button--tap"
+                    style={{ touchAction: 'manipulation' }}
+                    // pointerdown, not click: click fires on release, ~50-100ms after
+                    // the finger lands. Keyboard activation (detail 0) still uses click.
+                    onPointerDown={(e) => syncClickToTap(e.timeStamp)}
+                    onClick={(e) => {
+                      if (e.detail === 0) syncClickToTap();
+                    }}
+                    aria-label="Sync: tap on beat 1 to re-align the click"
+                    aria-describedby="sync-tap-hint"
+                  >
+                    Sync
+                  </button>
+                  <p id="sync-tap-hint" className="settings-note" style={{ textAlign: 'center', marginTop: -4 }} aria-live="polite">
+                    {syncFeedback || 'Click sounds off? Tap Sync exactly on your 1 and the click snaps to it.'}
+                  </p>
+                </>
+              )}
+            </>
             ),
             click: (
               <div className="manual-metronome">
@@ -609,26 +634,6 @@ function App() {
                 </div>
                 {metronomeActive && (
                   <>
-                    <div className="manual-metronome__nudge-row">
-                      <button
-                        type="button"
-                        className="pill-button pill-button--nudge"
-                        style={{ touchAction: 'manipulation' }}
-                        // pointerdown, not click: click fires on release, ~50-100ms after
-                        // the finger lands. Keyboard activation (detail 0) still uses click.
-                        onPointerDown={(e) => syncClickToTap(e.timeStamp)}
-                        onClick={(e) => {
-                          if (e.detail === 0) syncClickToTap();
-                        }}
-                        aria-label="Sync: tap on beat 1 to re-align the click"
-                        aria-describedby="sync-tap-hint"
-                      >
-                        Sync
-                      </button>
-                    </div>
-                    <p id="sync-tap-hint" className="settings-note" style={{ textAlign: 'center', marginTop: -4 }} aria-live="polite">
-                      {syncFeedback || 'Click sounds off? Tap Sync exactly on your 1 and the click snaps to it.'}
-                    </p>
                     <div className="manual-metronome__nudge-row">
                       <button
                         type="button"
@@ -777,6 +782,7 @@ function App() {
         <p className="privacy-note">
           Audio is processed live on this device only. Nothing is recorded, saved or uploaded.
         </p>
+        <p className="privacy-note build-stamp">Build {BUILD_LABEL}</p>
       </footer>
 
       {settingsOpen && (
